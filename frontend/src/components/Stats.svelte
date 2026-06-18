@@ -208,19 +208,19 @@
         <div class="bg-slate-950/40 border border-white/5 rounded-xl p-3.5 hover:border-slate-800 transition-all duration-300">
           <div class="flex items-center justify-between mb-2">
             <span class="text-sm font-medium text-white max-w-[150px] truncate" title={disk.name}>
-              {disk.name} <span class="text-slate-500 text-xs">({disk.disk_type})</span>
+              {disk.name} <span class="text-slate-500 text-xs">({disk.type})</span>
             </span>
-            <span class="text-xs font-semibold font-mono {disk.usage_percent > 90 ? 'text-rose-400' : 'text-slate-400'}">
-              {Math.round(disk.usage_percent)}%
+            <span class="text-xs font-semibold font-mono {disk.usagePercent > 90 ? 'text-rose-400' : 'text-slate-400'}">
+              {Math.round(disk.usagePercent)}%
             </span>
           </div>
           <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
             <div class="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-1000"
-                 style="width: {disk.usage_percent}%"></div>
+                 style="width: {disk.usagePercent}%"></div>
           </div>
           <div class="mt-2 text-xs text-slate-500 flex justify-between font-mono">
-            <span>{disk.used_gb.toFixed(1)} GB used</span>
-            <span>{disk.total_gb.toFixed(1)} GB total</span>
+            <span>{disk.usedGB.toFixed(1)} GB used</span>
+            <span>{disk.totalGB.toFixed(1)} GB total</span>
           </div>
         </div>
       {/each}
