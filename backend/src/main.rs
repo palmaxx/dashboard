@@ -1,6 +1,12 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use axum::{extract::State, routing::get, Json, Router};
+use axum::{
+    extract::State,
+    response::IntoResponse,
+    routing::get,
+    Json, Router
+};
+use axum::http::{HeaderMap, HeaderValue, header};
 use serde::Serialize;
 use sysinfo::{
     Components, Disks, Networks, System
@@ -264,10 +270,21 @@ async fn main() {
 
 async fn sysinfo_handler(
     State(state): State<SharedState>
-) -> Result<Json<HardwareSnapshot>, (axum::http::StatusCode, String)> {
+) -> Result<impl IntoResponse, (axum::http::StatusCode, String)> {
     let lock = state.read().await;
     match &*lock {
-        Some(snapshot) => Ok(Json(snapshot.clone())),
+        Some(snapshot) => {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
+            );
+            headers.insert(
+                header::PRAGMA,
+                HeaderValue::from_static("no-cache"),
+            );
+            Ok((headers, Json(snapshot.clone())))
+        }
         None => Err((
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
             "System metrics starting up...".to_string(),

@@ -7,7 +7,7 @@
 
   async function fetchStats() {
     try {
-      const res = await fetch('http://127.0.0.1:9999/api/sysinfo');
+      const res = await fetch('http://127.0.0.1:9999/api/sysinfo', { cache: 'no-store' });
       if (res.ok) {
         hardware = await res.json();
         status = 'online';
