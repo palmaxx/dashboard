@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #0a0a0f; color: #e2e8f0; overflow-x: hidden; }
+        
+        .glass { background: rgba(15, 15, 25, 0.75); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.08); }
+        .glass-light { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.06); }
+        
+        .hero-bg {
+            background-image: url('https://image.qwenlm.ai/public_source/ee2fefca-5f65-41b7-a92f-efa2fae1c07e/118c0c4d9-f8b4-4f7e-b260-98cc2cba8b5d.png');
+            background-size: cover; background-position: center;
+        }
+        
+        .time-glow { text-shadow: 0 0 40px rgba(139, 92, 246, 0.5), 0 0 80px rgba(139, 92, 246, 0.2); }
+        
+        .progress-bar { transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        .card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.3); border-color: rgba(139, 92, 246, 0.3); }
+        
+        .site-card:hover .site-icon { transform: scale(1.15); }
+        .site-icon { transition: transform 0.3s ease; }
+        
+        .todo-item { transition: all 0.3s ease; }
+        .todo-item.completed .todo-text { text-decoration: line-through; opacity: 0.4; }
+        .todo-item:hover { background: rgba(255,255,255,0.05); }
+        
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        
+        .fade-in { animation: fadeIn 0.8s ease forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .shimmer { background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0) 100%); background-size: 200% 100%; animation: shimmer 2s infinite; }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.3); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(139, 92, 246, 0.5); }
+        
+        input, select, textarea { outline: none; }
+        
+        .gradient-text { background: linear-gradient(135deg, #a78bfa, #60a5fa, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        .ring-pulse { animation: ringPulse 3s infinite; }
+        @keyframes ringPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.3); } 50% { box-shadow: 0 0 0 10px rgba(139, 92, 246, 0); } }
+        
+        .wallpaper-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+        .wallpaper-thumb { aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; cursor: pointer; transition: all 0.3s ease; border: 2px solid transparent; }
+        .wallpaper-thumb:hover { transform: scale(1.03); border-color: rgba(139, 92, 246, 0.5); }
+        .wallpaper-thumb.active { border-color: #a78bfa; }
+        .wallpaper-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Hero Section with Time & Wallpaper -->
+    <div class="relative w-full h-[45vh] min-h-[350px] hero-bg">
+        <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-black/40 to-[#0a0a0f]"></div>
+        <div class="absolute inset-0 flex flex-col items-center justify-center z-10">
+            <div class="text-center fade-in">
+                <div class="flex items-center justify-center gap-2 mb-3">
+                    <span class="pulse-dot w-2 h-2 bg-green-400 rounded-full inline-block"></span>
+                    <span class="text-sm text-gray-400 font-medium tracking-wider uppercase">Good <span id="greeting"></span></span>
+                </div>
+                <div class="text-7xl md:text-8xl font-bold time-glow font-[JetBrains_Mono] tracking-tight" id="clock">00:00</div>
+                <div class="text-2xl md:text-3xl text-gray-300 font-light mt-1" id="date"></div>
+                <div class="mt-4 flex items-center justify-center gap-6 text-sm text-gray-400">
+                    <span><i class="fa fa-thermometer-half mr-1"></i> <span id="weatherTemp">--</span>°C</span>
+                    <span><i class="fa fa-cloud mr-1"></i> <span id="weatherCond">--</span></span>
+                </div>
+            </div>
+        </div>
+        <div class="absolute bottom-4 right-4 z-10 flex items-center gap-2">
+            <button onclick="toggleWallpaperPicker()" class="glass px-4 py-2 rounded-xl text-sm hover:bg-white/10 transition flex items-center gap-2">
+                <i class="fa fa-picture-o"></i> Wallpaper
+            </button>
+            <button onclick="refreshWallpaper()" class="glass px-4 py-2 rounded-xl text-sm hover:bg-white/10 transition">
+                <i class="fa fa-refresh"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Wallpaper Picker Modal -->
+    <div id="wallpaperPicker" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div class="glass rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">Choose Wallpaper</h3>
+                <button onclick="toggleWallpaperPicker()" class="text-gray-400 hover:text-white transition"><i class="fa fa-times text-xl"></i></button>
+            </div>
+            <div class="wallpaper-grid" id="wallpaperGrid"></div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 py-6 space-y-6 -mt-4 relative z-20">
+        
+        <!-- Hardware Stats Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- CPU -->
+            <div class="glass rounded-2xl p-5 card-hover fade-in" style="animation-delay: 0.1s">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                            <i class="fa fa-microchip text-blue-400"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-400">CPU</div>
+                            <div class="text-lg font-bold" id="cpuPercent">0%</div>
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-500" id="cpuTemp">45°C</span>
+                </div>
+                <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div class="progress-bar h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full" id="cpuBar" style="width: 0%"></div>
+                </div>
+                <div class="mt-2 text-xs text-gray-500 flex justify-between">
+                    <span id="cpuCores">8 Cores</span>
+                    <span id="cpuFreq">3.6 GHz</span>
+                </div>
+            </div>
+
+            <!-- RAM -->
+            <div class="glass rounded-2xl p-5 card-hover fade-in" style="animation-delay: 0.15s">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                            <i class="fa fa-memory text-purple-400"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-400">Memory</div>
+                            <div class="text-lg font-bold" id="ramPercent">0%</div>
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-500" id="ramUsed">0 / 16 GB</span>
+                </div>
+                <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div class="progress-bar h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full" id="ramBar" style="width: 0%"></div>
+                </div>
+                <div class="mt-2 text-xs text-gray-500 flex justify-between">
+                    <span>DDR5</span>
+                    <span id="ramSpeed">4800 MHz</span>
+                </div>
+            </div>
+
+            <!-- GPU -->
+            <div class="glass rounded-2xl p-5 card-hover fade-in" style="animation-delay: 0.2s">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                            <i class="fa fa-desktop text-green-400"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-400">GPU</div>
+                            <div class="text-lg font-bold" id="gpuPercent">0%</div>
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-500" id="gpuTemp">52°C</span>
+                </div>
+                <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div class="progress-bar h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full" id="gpuBar" style="width: 0%"></div>
+                </div>
+                <div class="mt-2 text-xs text-gray-500 flex justify-between">
+                    <span id="gpuModel">RTX 4080</span>
+                    <span id="gpuVRAM">16 GB</span>
+                </div>
+            </div>
+
+            <!-- Network -->
+            <div class="glass rounded-2xl p-5 card-hover fade-in" style="animation-delay: 0.25s">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center">
+                            <i class="fa fa-wifi text-orange-400"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-400">Network</div>
+                            <div class="text-lg font-bold" id="netStatus">Online</div>
+                        </div>
+                    </div>
+                    <span class="text-xs text-green-400" id="ping">24ms</span>
+                </div>
+                <div class="flex gap-4 mt-2">
+                    <div class="flex-1">
+                        <div class="text-xs text-gray-500 mb-1">↓ Download</div>
+                        <div class="text-sm font-semibold text-green-400" id="netDown">0 MB/s</div>
+                    </div>
+                    <div class="flex-1">
+                        <div class="text-xs text-gray-500 mb-1">↑ Upload</div>
+                        <div class="text-sm font-semibold text-blue-400" id="netUp">0 MB/s</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Storage Section -->
+        <div class="glass rounded-2xl p-5 card-hover fade-in" style="animation-delay: 0.3s">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center">
+                    <i class="fa fa-hdd text-yellow-400"></i>
+                </div>
+                <div>
+                    <div class="text-lg font-semibold">Storage</div>
+                    <div class="text-xs text-gray-500">Hard drives & partitions</div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="driveGrid">
+                <!-- Drives injected by JS -->
+            </div>
+        </div>
+
+        <!-- Two Column: Favorites & Downloader -->
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            
+            <!-- Favorite Websites -->
+            <div class="lg:col-span-3 glass rounded-2xl p-5 card-hover fade-in" style="animation-delay: 0.35s">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                            <i class="fa fa-star text-indigo-400"></i>
+                        </div>
+                        <div>
+                            <div class="text-lg font-semibold">Favorite Websites</div>
+                            <div class="text-xs text-gray-500">Quick access links</div>
+                        </div>
+                    </div>
+                    <button onclick="toggleAddSite()" class="text-sm text-indigo-400 hover:text-indigo-300 transition">
+                        <i class="fa fa-plus-circle mr-1"></i> Add
+                    </button>
+                </div>
+                
+                <!-- Add Site Form -->
+                <div id="addSiteForm" class="hidden mb-4 glass-light rounded-xl p-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <input id="siteName" type="text" placeholder="Site name" class="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm placeholder-gray-500 focus:border-indigo-400 transition">
+                        <input id="siteUrl" type="text" placeholder="https://..." class="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm placeholder-gray-500 focus:border-indigo-400 transition">
+                        <button onclick="addSite()" class="bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl px-4 py-2.5 text-sm font-medium transition">
+                            <i class="fa fa-plus mr-1"></i> Add Site
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3" id="sitesGrid">
+                    <!-- Sites injected by JS -->
+                </div>
+            </div>
+
+            <!-- yt-dlp Downloader -->
+            <div class="lg:col-span-2 glass rounded-2xl p-5 card-hover fade-in" style="animation-delay: 0.4s">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
+                        <i class="fa fa-download text-red-400"></i>
+                    </div>
+                    <div>
+                        <div class="text-lg font-semibold">yt-dlp Downloader</div>
+                        <div class="text-xs text-gray-500">Download videos & audio</div>
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="relative">
+                        <input id="videoUrl" type="text" placeholder="Paste video URL..." class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm placeholder-gray-500 focus:border-red-400 transition pr-10">
+                        <i class="fa fa-link absolute right-3 top-3.5 text-gray-500"></i>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <select id="formatSelect" class="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-red-400 transition appearance-none cursor-pointer">
+                            <option value="best">Best Quality</option>
+                            <option value="bestvideo+bestaudio">Best Video + Audio</option>
+                            <option value="1080p">1080p MP4</option>
+                            <option value="720p">720p MP4</option>
+                            <option value="480p">480p MP4</option>
+                            <option value="mp3">Audio Only (MP3)</option>
+                            <option value="m4a">Audio Only (M4A)</option>
+                            <option value="opus">Audio Only (Opus)</option>
+                        </select>
+                        
+                        <select id="folderSelect" class="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-red-400 transition appearance-none cursor-pointer">
+                            <option value="~/Downloads/Videos">~/Downloads/Videos</option>
+                            <option value="~/Downloads/Music">~/Downloads/Music</option>
+                            <option value="~/Desktop">~/Desktop</option>
+                            <option value="~/Documents">~/Documents</option>
+                            <option value="custom">Custom Folder...</option>
+                        </select>
+                    </div>
+
+                    <div id="customFolderInput" class="hidden">
+                        <input id="customFolder" type="text" placeholder="/custom/folder/path" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm placeholder-gray-500 focus:border-red-400 transition">
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <button onclick="startDownload()" id="downloadBtn" class="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl px-4 py-3 text-sm font-semibold transition flex items-center justify-center gap-2">
+                            <i class="fa fa-download"></i> Download
+                        </button>
+                        <button onclick="addPlaylist()" class="glass hover:bg-white/10 rounded-xl px-4 py-3 text-sm transition">
+                            <i class="fa fa-list"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Download Queue -->
+                    <div id="downloadQueue" class="hidden mt-3 space-y-2 max-h-48 overflow-y-auto">
+                        <!-- Queue items injected by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Todo List -->
+        <div class="glass rounded-2xl p-5 card-hover fade-in" style="animation-delay: 0.45s">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-teal-500/20 flex items-center justify-center">
+                        <i class="fa fa-check-square-o text-teal-400"></i>
+                    </div>
+                    <div>
+                        <div class="text-lg font-semibold">Todo List</div>
+                        <div class="text-xs text-gray-500" id="todoCount">0 tasks remaining</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <select id="todoFilter" onchange="renderTodos()" class="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs focus:border-teal-400 transition appearance-none cursor-pointer">
+                        <option value="all">All</option>
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                    <button onclick="clearCompleted()" class="text-xs text-gray-500 hover:text-red-400 transition">
+                        Clear Done
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex gap-3 mb-4">
+                <input id="todoInput" type="text" placeholder="Add a new task..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm placeholder-gray-500 focus:border-teal-400 transition" onkeypress="if(event.key==='Enter')addTodo()">
+                <select id="todoPriority" class="bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm focus:border-teal-400 transition appearance-none cursor-pointer">
+                    <option value="low"> Low</option>
+                    <option value="medium">🟡 Medium</option>
+                    <option value="high">🔴 High</option>
+                </select>
+                <button onclick="addTodo()" class="bg-teal-500 hover:bg-teal-600 text-white rounded-xl px-5 py-3 text-sm font-medium transition">
+                    <i class="fa fa-plus"></i>
+                </button>
+            </div>
+            
+            <div id="todoList" class="space-y-1 max-h-72 overflow-y-auto pr-2">
+                <!-- Todos injected by JS -->
+            </div>
+            
+            <div id="emptyTodo" class="text-center py-8 text-gray-500">
+                <i class="fa fa-clipboard text-4xl mb-3 block opacity-30"></i>
+                <p class="text-sm">No tasks yet. Add one above!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center py-6 text-xs text-gray-600">
+        <p>Dashboard • <span id="uptime">System Online</span></p>
+    </div>
+
+    <script>
+        // ============ CLOCK & DATE ============
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('clock').textContent = `${hours}:${minutes}`;
+            
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('date').textContent = now.toLocaleDateString('en-US', options);
+            
+            const h = now.getHours();
+            const greet = h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
+            document.getElementById('greeting').textContent = greet;
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        // ============ HARDWARE STATS (Simulated) ============
+        let cpuVal = 25, ramVal = 45, gpuVal = 15, downVal = 2.5, upVal = 0.8;
+        
+        function updateHardware() {
+            cpuVal = Math.min(95, Math.max(8, cpuVal + (Math.random() - 0.5) * 20));
+            ramVal = Math.min(90, Math.max(30, ramVal + (Math.random() - 0.5) * 8));
+            gpuVal = Math.min(85, Math.max(5, gpuVal + (Math.random() - 0.5) * 15));
+            downVal = Math.max(0.1, downVal + (Math.random() - 0.5) * 3);
+            upVal = Math.max(0.05, upVal + (Math.random() - 0.5) * 1);
+            
+            const cpuTemp = Math.round(38 + cpuVal * 0.5);
+            const gpuTemp = Math.round(40 + gpuVal * 0.4);
+            const ping = Math.round(15 + Math.random() * 20);
+            
+            document.getElementById('cpuPercent').textContent = Math.round(cpuVal) + '%';
+            document.getElementById('cpuBar').style.width = cpuVal + '%';
+            document.getElementById('cpuTemp').textContent = cpuTemp + '°C';
+            document.getElementById('cpuTemp').style.color = cpuTemp > 70 ? '#ef4444' : cpuTemp > 55 ? '#f59e0b' : '#9ca3af';
+            
+            const ramUsed = (ramVal / 100 * 16).toFixed(1);
+            document.getElementById('ramPercent').textContent = Math.round(ramVal) + '%';
+            document.getElementById('ramBar').style.width = ramVal + '%';
+            document.getElementById('ramUsed').textContent = ramUsed + ' / 16 GB';
+            
+            document.getElementById('gpuPercent').textContent = Math.round(gpuVal) + '%';
+            document.getElementById('gpuBar').style.width = gpuVal + '%';
+            document.getElementById('gpuTemp').textContent = gpuTemp + '°C';
+            document.getElementById('gpuTemp').style.color = gpuTemp > 70 ? '#ef4444' : gpuTemp > 55 ? '#f59e0b' : '#9ca3af';
+            
+            document.getElementById('netDown').textContent = downVal.toFixed(1) + ' MB/s';
+            document.getElementById('netUp').textContent = upVal.toFixed(1) + ' MB/s';
+            document.getElementById('ping').textContent = ping + 'ms';
+        }
+        updateHardware();
+        setInterval(updateHardware, 2000);
+
+        // ============ STORAGE DRIVES ============
+        const drives = [
+            { label: 'C: Drive', name: 'Windows', used: 320, total: 500, color: 'blue' },
+            { label: 'D: Drive', name: 'Data', used: 850, total: 2000, color: 'purple' },
+            { label: 'E: Drive', name: 'Games', used: 1200, total: 2000, color: 'green' },
+            { label: 'F: Drive', name: 'Media', used: 3800, total: 4000, color: 'yellow' },
+            { label: 'External', name: 'Backup', used: 150, total: 1000, color: 'orange' },
+            { label: 'NVMe', name: 'Scratch', used: 450, total: 1000, color: 'red' }
+        ];
+
+        function renderDrives() {
+            const grid = document.getElementById('driveGrid');
+            grid.innerHTML = drives.map(d => {
+                const pct = Math.round(d.used / d.total * 100);
+                const colorMap = { blue: 'from-blue-500 to-blue-400', purple: 'from-purple-500 to-purple-400', green: 'from-green-500 to-green-400', yellow: 'from-yellow-500 to-yellow-400', orange: 'from-orange-500 to-orange-400', red: 'from-red-500 to-red-400' };
+                return `
+                    <div class="glass-light rounded-xl p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium">${d.label} <span class="text-gray-500">(${d.name})</span></span>
+                            <span class="text-xs ${pct > 90 ? 'text-red-400' : 'text-gray-400'}">${pct}%</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-white/5 rounded-full overflow-hidden">
+                            <div class="progress-bar h-full bg-gradient-to-r ${colorMap[d.color]} rounded-full" style="width: ${pct}%"></div>
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500">${d.used} GB / ${d.total} GB free</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        renderDrives();
+
+        // ============ FAVORITE WEBSITES ============
+        const defaultSites = [
+            { name: 'Google', url: 'https://google.com', icon: 'fa-google', color: '#4285f4' },
+            { name: 'YouTube', url: 'https://youtube.com', icon: 'fa-youtube-play', color: '#ff0000' },
+            { name: 'GitHub', url: 'https://github.com', icon: 'fa-github', color: '#e2e8f0' },
+            { name: 'Reddit', url: 'https://reddit.com', icon: 'fa-reddit', color: '#ff4500' },
+            { name: 'Twitter', url: 'https://twitter.com', icon: 'fa-twitter', color: '#1da1f2' },
+            { name: 'Stack Overflow', url: 'https://stackoverflow.com', icon: 'fa-stack-overflow', color: '#f48024' },
+            { name: 'Netflix', url: 'https://netflix.com', icon: 'fa-film', color: '#e50914' },
+            { name: 'Spotify', url: 'https://spotify.com', icon: 'fa-spotify', color: '#1db954' },
+            { name: 'Gmail', url: 'https://mail.google.com', icon: 'fa-envelope', color: '#ea4335' },
+            { name: 'Amazon', url: 'https://amazon.com', icon: 'fa-amazon', color: '#ff9900' }
+        ];
+
+        let sites = JSON.parse(localStorage.getItem('dashSites')) || defaultSites;
+
+        function renderSites() {
+            const grid = document.getElementById('sitesGrid');
+            grid.innerHTML = sites.map((s, i) => `
+                <a href="${s.url}" target="_blank" class="site-card glass-light rounded-xl p-4 flex flex-col items-center gap-2 card-hover group relative">
+                    <button onclick="event.preventDefault();event.stopPropagation();removeSite(${i})" class="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-red-500/20 text-red-400 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-xs">
+                        <i class="fa fa-times"></i>
+                    </button>
+                    <div class="site-icon w-12 h-12 rounded-2xl flex items-center justify-center text-2xl" style="background: ${s.color}22; color: ${s.color}">
+                        <i class="fa ${s.icon}"></i>
+                    </div>
+                    <span class="text-xs text-gray-400 text-center truncate w-full">${s.name}</span>
+                </a>
+            `).join('');
+        }
+        renderSites();
+
+        function toggleAddSite() {
+            document.getElementById('addSiteForm').classList.toggle('hidden');
+        }
+
+        function addSite() {
+            const name = document.getElementById('siteName').value.trim();
+            const url = document.getElementById('siteUrl').value.trim();
+            if (!name || !url) return;
+            let finalUrl = url.startsWith('http') ? url : 'https://' + url;
+            const icons = ['fa-globe', 'fa-link', 'fa-external-link', 'fa-laptop'];
+            const colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6'];
+            sites.push({ name, url: finalUrl, icon: icons[Math.floor(Math.random() * icons.length)], color: colors[Math.floor(Math.random() * colors.length)] });
+            localStorage.setItem('dashSites', JSON.stringify(sites));
+            document.getElementById('siteName').value = '';
+            document.getElementById('siteUrl').value = '';
+            renderSites();
+        }
+
+        function removeSite(idx) {
+            sites.splice(idx, 1);
+            localStorage.setItem('dashSites', JSON.stringify(sites));
+            renderSites();
+        }
+
+        // ============ yt-dlp DOWNLOADER ============
+        document.getElementById('folderSelect').addEventListener('change', function() {
+            document.getElementById('customFolderInput').classList.toggle('hidden', this.value !== 'custom');
+        });
+
+        let downloadQueue = [];
+        let downloadInterval = null;
+
+        function startDownload() {
+            const url = document.getElementById('videoUrl').value.trim();
+            if (!url) return;
+            
+            const format = document.getElementById('formatSelect').value;
+            const folderSelect = document.getElementById('folderSelect').value;
+            const folder = folderSelect === 'custom' ? document.getElementById('customFolder').value : folderSelect;
+            
+            const id = Date.now();
+            const item = { id, url, format, folder, progress: 0, status: 'downloading', speed: 0, eta: '--' };
+            downloadQueue.unshift(item);
+            document.getElementById('videoUrl').value = '';
+            
+            renderQueue();
+            simulateDownload(id);
+        }
+
+        function addPlaylist() {
+            const url = document.getElementById('videoUrl').value.trim();
+            if (!url) return;
+            const format = document.getElementById('formatSelect').value;
+            const folderSelect = document.getElementById('folderSelect').value;
+            const folder = folderSelect === 'custom' ? document.getElementById('customFolder').value : folderSelect;
+            
+            for (let i = 1; i <= 5; i++) {
+                const id = Date.now() + i;
+                downloadQueue.push({ id, url: url + `&index=${i}`, format, folder, progress: 0, status: 'queued', speed: 0, eta: '--' });
+            }
+            document.getElementById('videoUrl').value = '';
+            renderQueue();
+            processQueue();
+        }
+
+        function simulateDownload(id) {
+            const item = downloadQueue.find(q => q.id === id);
+            if (!item) return;
+            
+            item.status = 'downloading';
+            renderQueue();
+            
+            const iv = setInterval(() => {
+                const qItem = downloadQueue.find(q => q.id === id);
+                if (!qItem || qItem.progress >= 100) {
+                    clearInterval(iv);
+                    if (qItem) qItem.status = 'completed';
+                    renderQueue();
+                    return;
+                }
+                qItem.progress += Math.random() * 8 + 2;
+                qItem.speed = (Math.random() * 15 + 5).toFixed(1);
+                qItem.eta = Math.round((100 - qItem.progress) / 8) + 's';
+                if (qItem.progress > 100) qItem.progress = 100;
+                renderQueue();
+            }, 500);
+        }
+
+        function processQueue() {
+            const queued = downloadQueue.filter(q => q.status === 'queued');
+            if (queued.length > 0) {
+                setTimeout(() => {
+                    simulateDownload(queued[0].id);
+                    if (queued.length > 1) processQueue();
+                }, 2000);
+            }
+        }
+
+        function renderQueue() {
+            const container = document.getElementById('downloadQueue');
+            container.classList.toggle('hidden', downloadQueue.length === 0);
+            container.innerHTML = downloadQueue.map(q => {
+                const statusColor = q.status === 'completed' ? 'text-green-400' : q.status === 'downloading' ? 'text-blue-400' : 'text-gray-500';
+                const statusIcon = q.status === 'completed' ? 'fa-check-circle' : q.status === 'downloading' ? 'fa-spinner fa-spin' : 'fa-clock-o';
+                return `
+                    <div class="glass-light rounded-xl p-3">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs text-gray-400 truncate flex-1 mr-2">${q.url}</span>
+                            <span class="${statusColor} text-xs"><i class="fa ${statusIcon} mr-1"></i>${q.status === 'completed' ? 'Done' : q.status === 'downloading' ? q.progress.toFixed(0) + '%' : 'Queued'}</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                            <div class="h-full ${q.status === 'completed' ? 'bg-green-500' : 'bg-blue-500'} rounded-full transition-all duration-300" style="width: ${q.progress}%"></div>
+                        </div>
+                        ${q.status === 'downloading' ? `<div class="flex justify-between mt-1"><span class="text-xs text-gray-500">${q.speed} MB/s</span><span class="text-xs text-gray-500">ETA: ${q.eta}</span></div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ============ TODO LIST ============
+        let todos = JSON.parse(localStorage.getItem('dashTodos')) || [];
+
+        function saveTodos() {
+            localStorage.setItem('dashTodos', JSON.stringify(todos));
+        }
+
+        function addTodo() {
+            const input = document.getElementById('todoInput');
+            const text = input.value.trim();
+            if (!text) return;
+            const priority = document.getElementById('todoPriority').value;
+            todos.unshift({ id: Date.now(), text, completed: false, priority, created: new Date().toISOString() });
+            input.value = '';
+            saveTodos();
+            renderTodos();
+        }
+
+        function toggleTodo(id) {
+            const todo = todos.find(t => t.id === id);
+            if (todo) todo.completed = !todo.completed;
+            saveTodos();
+            renderTodos();
+        }
+
+        function deleteTodo(id) {
+            todos = todos.filter(t => t.id !== id);
+            saveTodos();
+            renderTodos();
+        }
+
+        function editTodo(id) {
+            const todo = todos.find(t => t.id === id);
+            if (!todo) return;
+            const newText = prompt('Edit task:', todo.text);
+            if (newText !== null && newText.trim()) {
+                todo.text = newText.trim();
+                saveTodos();
+                renderTodos();
+            }
+        }
+
+        function clearCompleted() {
+            todos = todos.filter(t => !t.completed);
+            saveTodos();
+            renderTodos();
+        }
+
+        function renderTodos() {
+            const filter = document.getElementById('todoFilter').value;
+            let filtered = todos;
+            if (filter === 'active') filtered = todos.filter(t => !t.completed);
+            if (filter === 'completed') filtered = todos.filter(t => t.completed);
+            
+            const remaining = todos.filter(t => !t.completed).length;
+            document.getElementById('todoCount').textContent = `${remaining} task${remaining !== 1 ? 's' : ''} remaining`;
+            
+            const container = document.getElementById('todoList');
+            const empty = document.getElementById('emptyTodo');
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            
+            empty.classList.add('hidden');
+            
+            const priorityColors = { low: 'bg-green-500/20 text-green-400 border-green-500/30', medium: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', high: 'bg-red-500/20 text-red-400 border-red-500/30' };
+            
+            container.innerHTML = filtered.map(t => `
+                <div class="todo-item ${t.completed ? 'completed' : ''} glass-light rounded-xl px-4 py-3 flex items-center gap-3 group">
+                    <button onclick="toggleTodo(${t.id})" class="w-5 h-5 rounded-full border-2 ${t.completed ? 'bg-teal-500 border-teal-500' : 'border-gray-500 hover:border-teal-400'} flex items-center justify-center transition flex-shrink-0">
+                        ${t.completed ? '<i class="fa fa-check text-white text-xs"></i>' : ''}
+                    </button>
+                    <span class="todo-text text-sm flex-1 ${t.completed ? 'line-through text-gray-500' : 'text-gray-200'}">${escapeHtml(t.text)}</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full border ${priorityColors[t.priority]}">${t.priority}</span>
+                    <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                        <button onclick="editTodo(${t.id})" class="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center text-gray-400 transition">
+                            <i class="fa fa-pencil text-xs"></i>
+                        </button>
+                        <button onclick="deleteTodo(${t.id})" class="w-6 h-6 rounded-lg hover:bg-red-500/20 flex items-center justify-center text-gray-400 hover:text-red-400 transition">
+                            <i class="fa fa-trash text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        renderTodos();
+
+        // ============ WALLPAPER PICKER ============
+        const wallpapers = [
+            { url: 'https://image.qwenlm.ai/public_source/ee2fefca-5f65-41b7-a92f-efa2fae1c07e/118c0c4d9-f8b4-4f7e-b260-98cc2cba8b5d.png', name: 'Mountain Lake' },
+            { url: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920&h=1080&fit=crop', name: 'Forest Valley' },
+            { url: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920&h=1080&fit=crop', name: 'Green Forest' },
+            { url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop', name: 'Snowy Peaks' },
+            { url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&h=1080&fit=crop', name: 'Night Sky' },
+            { url: 'https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=1920&h=1080&fit=crop', name: 'Waterfall' },
+            { url: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=1920&h=1080&fit=crop', name: 'Rolling Hills' },
+            { url: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1920&h=1080&fit=crop', name: 'Lake Sunset' }
+        ];
+
+        function toggleWallpaperPicker() {
+            const picker = document.getElementById('wallpaperPicker');
+            picker.classList.toggle('hidden');
+            if (!picker.classList.contains('hidden')) renderWallpaperGrid();
+        }
+
+        function renderWallpaperGrid() {
+            const grid = document.getElementById('wallpaperGrid');
+            const currentBg = document.querySelector('.hero-bg').style.backgroundImage;
+            grid.innerHTML = wallpapers.map((w, i) => {
+                const isActive = currentBg && currentBg.includes(w.url.split('/').pop().split('?')[0]);
+                return `
+                    <div class="wallpaper-thumb ${isActive ? 'active' : ''}" onclick="setWallpaper('${w.url}')">
+                        <img src="${w.url}" alt="${w.name}" loading="lazy">
+                        <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                            <span class="text-xs text-white">${w.name}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function setWallpaper(url) {
+            document.querySelector('.hero-bg').style.backgroundImage = `url('${url}')`;
+            localStorage.setItem('dashWallpaper', url);
+            toggleWallpaperPicker();
+        }
+
+        function refreshWallpaper() {
+            const random = wallpapers[Math.floor(Math.random() * wallpapers.length)];
+            setWallpaper(random.url);
+        }
+
+        // Load saved wallpaper
+        const savedWallpaper = localStorage.getItem('dashWallpaper');
+        if (savedWallpaper) {
+            document.querySelector('.hero-bg').style.backgroundImage = `url('${savedWallpaper}')`;
+        }
+
+        // ============ WEATHER SIMULATION ============
+        function updateWeather() {
+            const temps = [18, 22, 25, 19, 23, 27, 20, 24];
+            const conditions = ['Partly Cloudy', 'Sunny', 'Overcast', 'Clear Sky', 'Light Rain'];
+            document.getElementById('weatherTemp').textContent = temps[Math.floor(Math.random() * temps.length)];
+            document.getElementById('weatherCond').textContent = conditions[Math.floor(Math.random() * conditions.length)];
+        }
+        updateWeather();
+
+        // ============ UPTIME ============
+        let startTime = Date.now();
+        setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const h = Math.floor(elapsed / 3600);
+            const m = Math.floor((elapsed % 3600) / 60);
+            const s = elapsed % 60;
+            document.getElementById('uptime').textContent = `Uptime: ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        }, 1000);
+
+        // Close modal on outside click
+        document.getElementById('wallpaperPicker').addEventListener('click', function(e) {
+            if (e.target === this) toggleWallpaperPicker();
+        });
+    </script>
+</body>
+</html>
+
