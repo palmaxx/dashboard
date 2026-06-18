@@ -39,6 +39,31 @@
     setWallpaper(chosen.url);
   }
 
+  let customWallpaperUrl = '';
+
+  function handleCustomUrlApply() {
+    if (customWallpaperUrl.trim()) {
+      setWallpaper(customWallpaperUrl.trim());
+      customWallpaperUrl = '';
+    }
+  }
+
+  function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Image is too large! Please choose an image under 2MB to fit in browser storage.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setWallpaper(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
   onMount(() => {
     const saved = localStorage.getItem('dashWallpaper');
     if (saved) {
@@ -111,6 +136,33 @@
               </div>
             </button>
           {/each}
+        </div>
+
+        <!-- Custom Wallpaper Section -->
+        <div class="mt-6 border-t border-white/5 pt-4 text-left">
+          <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Use Custom Background</h4>
+          <div class="flex flex-col gap-3">
+            <!-- File Upload -->
+            <div class="flex items-center gap-2">
+              <label class="glass px-3.5 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/10 hover:text-white cursor-pointer select-none">
+                <i class="fa fa-upload mr-1.5"></i> Upload Image
+                <input type="file" accept="image/*" on:change={handleFileUpload} class="hidden" />
+              </label>
+              <span class="text-[10px] text-slate-500">Max size: 2MB</span>
+            </div>
+
+            <!-- URL Input -->
+            <div class="flex gap-2">
+              <input type="text" bind:value={customWallpaperUrl} placeholder="Paste image URL (e.g. from Unsplash)..."
+                     class="flex-1 bg-white/5 border border-white/5 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-indigo-500/50 outline-none transition"
+              />
+              <button on:click={handleCustomUrlApply}
+                      class="bg-indigo-500 hover:bg-indigo-600 text-slate-950 font-bold text-xs rounded-xl px-4 py-2 transition"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
