@@ -5,6 +5,8 @@
   let dateString = '';
   let greeting = '';
 
+  export let connectionStatus = 'loading';
+
   function update() {
     const now = new Date();
     const hours = String(now.getHours()).padStart(2, '0');
@@ -15,12 +17,16 @@
     dateString = now.toLocaleDateString('en-US', options);
 
     const h = now.getHours();
-    if (h < 12) {
+    if (h < 5) {
+      greeting = 'Night';
+    } else if (h < 12) {
       greeting = 'Morning';
-    } else if (h < 18) {
+    } else if (h < 17) {
       greeting = 'Afternoon';
-    } else {
+    } else if (h < 22) {
       greeting = 'Evening';
+    } else {
+      greeting = 'Night';
     }
   }
 
@@ -33,7 +39,11 @@
 
 <div class="text-center select-none py-8">
   <div class="flex items-center justify-center gap-2 mb-3">
-    <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+    <span class="w-2 h-2 rounded-full animate-pulse transition-all duration-500
+      {connectionStatus === 'online' ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]' : 
+       connectionStatus === 'offline' ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]' : 
+       'bg-slate-500 shadow-[0_0_6px_rgba(100,116,139,0.5)]'}"
+    ></span>
     <span class="text-xs text-slate-400 font-semibold tracking-widest uppercase">
       Good {greeting}
     </span>

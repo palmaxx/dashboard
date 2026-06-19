@@ -1,18 +1,23 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use axum::{
-    extract::State,
+    extract::{State, Path},
     response::IntoResponse,
-    routing::get,
+    routing::{get, post, put, delete},
     Json, Router
 };
-use axum::http::{HeaderMap, HeaderValue, header};
-use serde::Serialize;
+use axum::http::{HeaderMap, HeaderValue, header, StatusCode};
+use serde::{Deserialize, Serialize};
 use sysinfo::{
     Components, Disks, Networks, System
 };
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
+use std::fs;
+use std::path::PathBuf;
+
+mod models;
+mod notes;
 
 #[derive(Serialize, Clone, Debug)]
 struct CpuInfo {
@@ -259,6 +264,11 @@ async fn main() {
     // Build the Axum router
     let app = Router::new()
         .route("/api/sysinfo", get(sysinfo_handler))
+        .route("/api/projects", get(projects_handler))
+        .route("/api/projects/:project_id/add", post(add_entry_handler))
+        .route("/api/projects/:project_id/toggle/:line", post(toggle_entry_handler))
+        .route("/api/projects/:project_id/update/:line", put(update_entry_handler))
+        .route("/api/projects/:project_id/delete/:line", delete(delete_entry_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -291,3 +301,128 @@ async fn sysinfo_handler(
         )),
     }
 }
+
+// --- REPOTASKS API LOGIC ---
+
+fn repotasks_projects_file() -> Result<PathBuf, String> {
+    let dir = dirs::config_dir().ok_or("Could not determine config dir")?.join("com.repotasks.app");
+    Ok(dir.join("projects.json"))
+}
+
+fn load_projects() -> Result<Vec<models::Project>, String> {
+    let path = repotasks_projects_file()?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&data).map_err(|e| e.to_string())
+}
+
+fn find_project(project_id: &str) -> Result<models::Project, String> {
+    load_projects()?
+        .into_iter()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("No project with id {}", project_id))
+}
+
+#[derive(Serialize)]
+struct ProjectData {
+    project: models::Project,
+    entries: Vec<models::Entry>,
+}
+
+async fn projects_handler() -> Result<Json<Vec<ProjectData>>, (StatusCode, String)> {
+    let projects = load_projects().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let mut result = Vec::new();
+
+    for project in projects {
+        let note_path = std::path::Path::new(&project.path).join("NOTES.md");
+        let entries = if note_path.exists() {
+            let content = fs::read_to_string(&note_path).unwrap_or_default();
+            notes::parse_notes(&content)
+        } else {
+            Vec::new()
+        };
+
+        result.push(ProjectData { project, entries });
+    }
+
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+struct AddEntryPayload {
+    text: String,
+    is_todo: bool,
+}
+
+async fn add_entry_handler(
+    Path(project_id): Path<String>,
+    Json(payload): Json<AddEntryPayload>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let text = payload.text.trim();
+    if text.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Empty note".into()));
+    }
+
+    let project = find_project(&project_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let note_path = std::path::Path::new(&project.path).join("NOTES.md");
+    
+    let content = if note_path.exists() {
+        fs::read_to_string(&note_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    } else {
+        format!("# {} — Notes\n\n## Inbox\n\n## Notes\n", project.name)
+    };
+
+    let stamp = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+    let line = notes::format_entry(text, payload.is_todo, &stamp);
+    let updated = notes::append_to_inbox(&content, &line);
+
+    fs::write(&note_path, updated).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::OK)
+}
+
+async fn toggle_entry_handler(
+    Path((project_id, line)): Path<(String, usize)>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    rewrite_notes(&project_id, |c| notes::toggle_todo_at(c, line))
+}
+
+#[derive(Deserialize)]
+struct UpdateEntryPayload {
+    text: String,
+}
+
+async fn update_entry_handler(
+    Path((project_id, line)): Path<(String, usize)>,
+    Json(payload): Json<UpdateEntryPayload>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    rewrite_notes(&project_id, |c| notes::update_text_at(c, line, &payload.text))
+}
+
+async fn delete_entry_handler(
+    Path((project_id, line)): Path<(String, usize)>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    rewrite_notes(&project_id, |c| notes::delete_at(c, line))
+}
+
+fn rewrite_notes(
+    project_id: &str,
+    f: impl FnOnce(&str) -> Result<String, String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let project = find_project(project_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let note_path = std::path::Path::new(&project.path).join("NOTES.md");
+    
+    if !note_path.exists() {
+        return Err((StatusCode::NOT_FOUND, "NOTES.md not found".into()));
+    }
+
+    let content = fs::read_to_string(&note_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let updated = f(&content).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    
+    fs::write(&note_path, updated).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::OK)
+}
+

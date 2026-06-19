@@ -1,56 +1,38 @@
 <script>
-  import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
 
-  let hardware = null;
-  let status = 'loading'; // 'loading' | 'online' | 'offline'
-  let lastUpdated = null;
-
-  async function fetchStats() {
-    try {
-      const res = await fetch('http://127.0.0.1:9999/api/sysinfo', { cache: 'no-store' });
-      if (res.ok) {
-        hardware = await res.json();
-        status = 'online';
-        lastUpdated = new Date(hardware.timestamp);
-      } else {
-        throw new Error('Not OK');
-      }
-    } catch (e) {
-      status = 'offline';
-    }
-  }
-
-  onMount(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 3000);
-    return () => clearInterval(interval);
-  });
+  export let hardware = null;
+  export let status = 'loading';
+  export let lastUpdated = null;
+  export let showStatusBar = true;
 </script>
 
 <!-- Hardware Daemon Connection Status -->
-<div class="flex items-center justify-between px-4 py-2 rounded-xl mb-4 text-xs font-semibold select-none
-  {status === 'online' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
-   status === 'offline' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 
-   'bg-slate-800 text-slate-400 border border-slate-700'}"
->
-  <div class="flex items-center gap-2">
-    <span class="w-2 h-2 rounded-full {status === 'online' ? 'bg-emerald-400 animate-pulse' : status === 'offline' ? 'bg-amber-400' : 'bg-slate-400'}"></span>
-    <span>
-      {#if status === 'online'}
-        Local Daemon: Connected
-      {:else if status === 'offline'}
-        Local Daemon: Offline (Run Rust daemon or tray app for real system stats)
-      {:else}
-        Connecting to local daemon...
-      {/if}
-    </span>
+{#if showStatusBar}
+  <div transition:fade={{ duration: 350 }} class="absolute -top-11 left-4 right-4 flex items-center justify-between px-4 py-2 rounded-xl text-xs font-semibold select-none z-30
+    {status === 'online' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+     status === 'offline' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 
+     'bg-slate-800 text-slate-400 border border-slate-700'}"
+  >
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full {status === 'online' ? 'bg-emerald-400 animate-pulse' : status === 'offline' ? 'bg-amber-400' : 'bg-slate-400'}"></span>
+      <span>
+        {#if status === 'online'}
+          Local Daemon: Connected
+        {:else if status === 'offline'}
+          Local Daemon: Offline (Run Rust daemon or tray app for real system stats)
+        {:else}
+          Connecting to local daemon...
+        {/if}
+      </span>
+    </div>
+    {#if status === 'online' && lastUpdated}
+      <span class="text-slate-400 font-normal">
+        Last update: {lastUpdated.toLocaleTimeString()}
+      </span>
+    {/if}
   </div>
-  {#if status === 'online' && lastUpdated}
-    <span class="text-slate-400 font-normal">
-      Last update: {lastUpdated.toLocaleTimeString()}
-    </span>
-  {/if}
-</div>
+{/if}
 
 <!-- Main Stats Grid -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -64,27 +64,79 @@
     reader.readAsDataURL(file);
   }
 
+  // System metrics state and polling
+  let hardware = null;
+  let status = 'loading'; // 'loading' | 'online' | 'offline'
+  let lastUpdated = null;
+  let showStatusBar = true;
+  let hideStatusTimeout = null;
+
+  async function fetchSystemInfo() {
+    try {
+      const res = await fetch('http://127.0.0.1:9999/api/sysinfo', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        hardware = data;
+        lastUpdated = new Date();
+        
+        if (status !== 'online') {
+          status = 'online';
+          showStatusBar = true;
+          if (hideStatusTimeout) clearTimeout(hideStatusTimeout);
+          hideStatusTimeout = setTimeout(() => {
+            showStatusBar = false;
+          }, 5000);
+        }
+      } else {
+        handleOffline();
+      }
+    } catch (err) {
+      handleOffline();
+    }
+  }
+
+  function handleOffline() {
+    if (status !== 'offline') {
+      status = 'offline';
+      showStatusBar = true;
+      if (hideStatusTimeout) {
+        clearTimeout(hideStatusTimeout);
+        hideStatusTimeout = null;
+      }
+    }
+  }
+
   onMount(() => {
     const saved = localStorage.getItem('dashWallpaper');
     if (saved) {
       currentWallpaper = saved;
     }
     updateWeather();
+
+    // Initial query
+    fetchSystemInfo();
+    // Query every 3 seconds
+    const intervalId = setInterval(fetchSystemInfo, 3000);
+
+    return () => {
+      clearInterval(intervalId);
+      if (hideStatusTimeout) clearTimeout(hideStatusTimeout);
+    };
   });
 </script>
 
 <main class="min-h-screen text-slate-200 bg-[#0a0a0f] relative font-sans pb-10">
   
   <!-- Hero Section with Background Wallpaper -->
-  <div class="relative w-full h-[40vh] min-h-[280px] bg-cover bg-center transition-all duration-700"
+  <div class="relative w-full h-[52vh] min-h-[340px] bg-cover bg-center transition-all duration-700"
        style="background-image: url('{currentWallpaper}')"
   >
-    <!-- Dark overlay -->
-    <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-black/40 to-[#0a0a0f]"></div>
+    <!-- Dark overlay with smooth gradient fade to the background around the boxes -->
+    <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-black/15 via-[#0a0a0f]/85 to-[#0a0a0f]"></div>
     
-    <!-- Time, Date, and Greeting -->
-    <div class="absolute inset-0 flex flex-col items-center justify-center z-10 px-4">
-      <Clock />
+    <!-- Time, Date, and Greeting (shifted up to prevent collision with overlapping cards) -->
+    <div class="absolute inset-0 flex flex-col items-center justify-center pb-32 z-10 px-4">
+      <Clock connectionStatus={status} />
       
       <!-- Weather Badge -->
       <div class="flex items-center gap-4 text-xs font-semibold text-slate-300 mt-2 bg-black/30 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/5 select-none">
@@ -94,8 +146,8 @@
       </div>
     </div>
     
-    <!-- Wallpaper Picker Controls -->
-    <div class="absolute bottom-4 right-4 z-10 flex items-center gap-2">
+    <!-- Wallpaper Picker Controls (Moved to top-right to avoid collisions) -->
+    <div class="absolute top-4 right-4 z-20 flex items-center gap-2">
       <button on:click={() => showWallpaperPicker = true} 
               class="glass px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition flex items-center gap-2 select-none"
       >
@@ -168,9 +220,9 @@
     </div>
   {/if}
 
-  <!-- Main Content Dashboard Container -->
-  <div class="max-w-7xl mx-auto px-4 pb-12 -mt-6 relative z-20">
-    <Stats />
+  <!-- Main Content Dashboard Container (Pulled higher on faded wallpaper background) -->
+  <div class="max-w-7xl mx-auto px-4 pb-12 -mt-20 relative z-20">
+    <Stats {hardware} {status} {lastUpdated} {showStatusBar} />
     <Bookmarks />
     <Todos />
   </div>
