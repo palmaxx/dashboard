@@ -123,7 +123,12 @@
       if (hideStatusTimeout) clearTimeout(hideStatusTimeout);
     };
   });
+
+  // Tab state for switching between Stats and Bookmarks
+  let activeTab = 'stats'; // 'stats' | 'bookmarks'
 </script>
+
+<svelte:window on:keydown={(e) => e.key === 'Escape' && showWallpaperPicker && (showWallpaperPicker = false)} />
 
 <main class="min-h-screen text-slate-200 bg-[#0a0a0f] relative font-sans pb-10">
   
@@ -164,6 +169,8 @@
 
   <!-- Wallpaper Picker Modal -->
   {#if showWallpaperPicker}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
          on:click|self={() => showWallpaperPicker = false}
     >
@@ -172,6 +179,7 @@
           <h3 class="text-base font-bold text-white">Choose Background</h3>
           <button on:click={() => showWallpaperPicker = false} 
                   class="text-slate-400 hover:text-white transition"
+                  title="Close"
           >
             <i class="fa fa-times text-lg"></i>
           </button>
@@ -222,9 +230,37 @@
 
   <!-- Main Content Dashboard Container (Pulled higher on faded wallpaper background) -->
   <div class="max-w-7xl mx-auto px-4 pb-12 -mt-20 relative z-20">
-    <Stats {hardware} {status} {lastUpdated} {showStatusBar} />
-    <Bookmarks />
-    <Todos />
+    
+    <!-- Tab Navigation -->
+    <div class="flex justify-center mb-6">
+      <div class="glass p-1 rounded-2xl flex gap-1 bg-black/20 backdrop-blur-md border border-white/10">
+        <button 
+          on:click={() => activeTab = 'stats'}
+          class="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 {activeTab === 'stats' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}"
+        >
+          <i class="fa fa-microchip mr-2"></i> Hardware Stats
+        </button>
+        <button 
+          on:click={() => activeTab = 'bookmarks'}
+          class="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 {activeTab === 'bookmarks' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}"
+        >
+          <i class="fa fa-bookmark mr-2"></i> Bookmarks
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="transition-all duration-500">
+      {#if activeTab === 'stats'}
+        <Stats {hardware} {status} {lastUpdated} {showStatusBar} />
+      {:else if activeTab === 'bookmarks'}
+        <Bookmarks />
+      {/if}
+    </div>
+
+    <div class="mt-8">
+      <Todos />
+    </div>
   </div>
 
 </main>

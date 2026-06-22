@@ -133,6 +133,7 @@
                 <button on:click={() => toggleTodo(pd.project.id, entry.line)} 
                         class="w-5 h-5 mt-0.5 rounded-full border-2 flex shrink-0 items-center justify-center transition"
                         style="{entry.done ? `background-color: ${pd.project.color}; border-color: ${pd.project.color};` : 'border-color: #64748b;'} "
+                        title={entry.done ? "Mark as incomplete" : "Mark as complete"}
                 >
                   {#if entry.done}
                     <i class="fa fa-check text-[10px] text-slate-950"></i>
@@ -157,11 +158,13 @@
               <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition duration-300 shrink-0">
                 <button on:click={() => editTodo(pd.project.id, entry.line, entry.text)} 
                         class="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition"
+                        title="Edit Todo"
                 >
                   <i class="fa fa-pencil text-[10px]"></i>
                 </button>
                 <button on:click={() => deleteTodo(pd.project.id, entry.line)} 
                         class="w-6 h-6 rounded-lg hover:bg-rose-500/10 flex items-center justify-center text-slate-400 hover:text-rose-400 transition"
+                        title="Delete Todo"
                 >
                   <i class="fa fa-trash text-[10px]"></i>
                 </button>
