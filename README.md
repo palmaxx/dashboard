@@ -1,9 +1,9 @@
 # Sleek Dashboard
 
-A lightweight, responsive, and powerful web dashboard designed to override your default **Chrome New Tab page**.
+A lightweight, responsive, and powerful web dashboard designed to override your default **Chrome New Tab page** on both macOS and Windows.
 
 This project uses a decoupled hybrid architecture:
-1. **Frontend (Chrome Extension):** Built with **Svelte + Vite + Tailwind CSS v4**. It loads instantly from your local drive and interacts with native browser APIs (like `chrome.bookmarks`).
+1. **Frontend (Chrome Extension):** Built with **Svelte + Vite + Tailwind CSS v4**. It loads instantly from your local drive and interacts with native browser APIs (like `chrome.bookmarks`) in Chrome on macOS and Windows.
 2. **Backend (Daemon):** A lightweight background service written in **Rust (Axum + sysinfo)**. It queries system stats (CPU, RAM, Disks, Network) and serves them locally with a memory footprint of **under 15MB RAM**.
 
 ---
@@ -30,7 +30,19 @@ dashboard/
 ### Prerequisites
 * [Node.js](https://nodejs.org/) (v18+ recommended)
 * [Rust & Cargo](https://www.rust-lang.org/tools/install) (to compile the daemon)
-* Google Chrome (or any Chromium browser)
+* Google Chrome (or any Chromium browser) on macOS or Windows
+
+---
+
+## Build Everything
+
+From the repository root, run:
+
+```bash
+npm run build
+```
+
+That will install the frontend dependencies if needed, build the Svelte app, and compile the Rust backend in release mode.
 
 ---
 
@@ -52,17 +64,11 @@ The backend daemon must run locally on your system to fetch hardware stats. It l
 
 ## Step 2: Build the Svelte Frontend
 
-To load the dashboard into Chrome, we first need to compile the Svelte code into static web files.
+To load the dashboard into Chrome, the Svelte code must be compiled into static web files.
 
-1. Open a new terminal and navigate to the frontend folder:
-   ```bash
-   cd frontend
-   ```
-2. Build the project:
-   ```bash
-   npm run build
-   ```
-   This generates a `dist/` directory inside the `frontend` folder containing the compiled HTML, CSS, JavaScript, and `manifest.json`.
+1. Open a new terminal in the repository root.
+2. Build the project with `npm run build` if you have not already done so.
+3. This generates a `frontend/dist/` directory containing the compiled HTML, CSS, JavaScript, and `manifest.json`.
 
 ---
 
@@ -75,10 +81,7 @@ To load the dashboard into Chrome, we first need to compile the Svelte code into
    ```
 3. In the top-right corner, toggle **Developer mode** to **ON**.
 4. In the top-left corner, click **Load unpacked**.
-5. Select the `dist` folder:
-   ```text
-   C:\DEV\ai-dev\dashboard\frontend\dist
-   ```
+5. Select the `frontend/dist` folder.
 6. Open a new tab in Chrome (`Ctrl + T`). 
 7. Chrome will show a popup saying *"Is this the new tab page you expected?"*. Click **Keep it** to set the dashboard as your default home page.
 
@@ -106,7 +109,7 @@ npm run dev
 ### Q: How do I update the extension after modifying code?
 **A:** 
 1. Modify your code in `frontend/src/`.
-2. Run `npm run build` inside the `frontend` directory.
+2. Run `npm run build` from the repository root or `cd frontend && npm run build`.
 3. Open `chrome://extensions` in Chrome and click the **Refresh (circular arrow)** icon on the **Sleek Dashboard** card.
 
 ---
