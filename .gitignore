@@ -5,6 +5,8 @@ backend/target/
 frontend/node_modules/
 frontend/dist/
 frontend/.svelte-kit/
+logs/*.log
+!logs/.gitkeep
 
 # OS/Editor configs
 .DS_Store

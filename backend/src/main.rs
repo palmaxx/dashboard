@@ -1,20 +1,20 @@
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::{
-    extract::{State, Path},
+    extract::{Path, State},
     response::IntoResponse,
-    routing::{get, post, put, delete},
-    Json, Router
+    routing::{delete, get, post, put},
+    Json, Router,
 };
-use axum::http::{HeaderMap, HeaderValue, header, StatusCode};
 use serde::{Deserialize, Serialize};
-use sysinfo::{
-    Components, Disks, Networks, System
-};
-use tokio::sync::RwLock;
-use tower_http::cors::CorsLayer;
+use std::collections::VecDeque;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use sysinfo::{Components, Disks, Networks, System};
+use tokio::sync::RwLock;
+use tower_http::cors::CorsLayer;
 
 mod models;
 mod notes;
@@ -47,7 +47,7 @@ struct GpuInfo {
     usage_percent: Option<f32>,
     #[serde(rename = "temperatureC")]
     temperature_c: Option<f32>,
-    model: String,
+    model: Option<String>,
     #[serde(rename = "vramGB")]
     vram_gb: Option<f32>,
 }
@@ -56,7 +56,7 @@ struct GpuInfo {
 struct NetworkInfo {
     status: String,
     #[serde(rename = "interfaceName")]
-    interface_name: String,
+    interface_name: Option<String>,
     #[serde(rename = "downloadMBps")]
     download_mbps: f32,
     #[serde(rename = "uploadMBps")]
@@ -78,6 +78,29 @@ struct StorageInfo {
 }
 
 #[derive(Serialize, Clone, Debug)]
+struct HistorySample {
+    timestamp: String,
+    #[serde(rename = "cpuUsagePercent")]
+    cpu_usage_percent: f32,
+    #[serde(rename = "memoryUsagePercent")]
+    memory_usage_percent: f32,
+    #[serde(rename = "gpuUsagePercent")]
+    gpu_usage_percent: Option<f32>,
+    #[serde(rename = "downloadMBps")]
+    download_mbps: f32,
+    #[serde(rename = "uploadMBps")]
+    upload_mbps: f32,
+}
+
+#[derive(Clone, Debug, Default)]
+struct GpuProbe {
+    usage_percent: Option<f32>,
+    temperature_c: Option<f32>,
+    model: Option<String>,
+    vram_gb: Option<f32>,
+}
+
+#[derive(Serialize, Clone, Debug)]
 struct HardwareSnapshot {
     timestamp: String,
     cpu: CpuInfo,
@@ -85,9 +108,184 @@ struct HardwareSnapshot {
     gpu: GpuInfo,
     network: NetworkInfo,
     storage: Vec<StorageInfo>,
+    history: Vec<HistorySample>,
 }
 
 type SharedState = Arc<RwLock<Option<HardwareSnapshot>>>;
+
+fn parse_positive_f32(value: Option<&str>) -> Option<f32> {
+    value
+        .map(str::trim)
+        .and_then(|part| part.parse::<f32>().ok())
+        .filter(|number| number.is_finite() && *number >= 0.0)
+}
+
+fn log_info(message: impl AsRef<str>) {
+    println!(
+        "[{}] INFO {}",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+        message.as_ref()
+    );
+}
+
+fn log_warn(message: impl AsRef<str>) {
+    eprintln!(
+        "[{}] WARN {}",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+        message.as_ref()
+    );
+}
+
+fn log_error(message: impl AsRef<str>) {
+    eprintln!(
+        "[{}] ERROR {}",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+        message.as_ref()
+    );
+}
+
+fn run_probe_command(command: &mut Command) -> std::io::Result<std::process::Output> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    command.output()
+}
+
+fn command_failure(label: &str, output: &std::process::Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let message = stderr.trim();
+    if message.is_empty() {
+        format!("{} exited with status {}", label, output.status)
+    } else {
+        format!(
+            "{} exited with status {}: {}",
+            label, output.status, message
+        )
+    }
+}
+
+fn probe_nvidia_gpu() -> Result<GpuProbe, String> {
+    let mut command = Command::new("nvidia-smi");
+    command.args([
+        "--query-gpu=name,utilization.gpu,temperature.gpu,memory.total",
+        "--format=csv,noheader,nounits",
+    ]);
+
+    let output = run_probe_command(&mut command)
+        .map_err(|error| format!("nvidia-smi could not be started: {}", error))?;
+
+    if !output.status.success() {
+        return Err(command_failure("nvidia-smi", &output));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let first_line = stdout
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .ok_or_else(|| "nvidia-smi returned no GPU rows".to_string())?;
+    let parts: Vec<&str> = first_line.split(',').collect();
+    let model = parts
+        .first()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let usage_percent = parse_positive_f32(parts.get(1).copied());
+    let temperature_c = parse_positive_f32(parts.get(2).copied());
+    let vram_gb = parse_positive_f32(parts.get(3).copied()).map(|mib| mib / 1024.0);
+
+    Ok(GpuProbe {
+        usage_percent,
+        temperature_c,
+        model,
+        vram_gb,
+    })
+}
+
+#[cfg(windows)]
+fn probe_windows_gpu_metadata() -> Result<GpuProbe, String> {
+    let mut command = Command::new("powershell.exe");
+    command.args([
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Get-CimInstance Win32_VideoController | Select-Object -First 1 Name,AdapterRAM | ForEach-Object { \"{0}|{1}\" -f $_.Name,$_.AdapterRAM }",
+    ]);
+
+    let output = run_probe_command(&mut command).map_err(|error| {
+        format!(
+            "PowerShell GPU metadata probe could not be started: {}",
+            error
+        )
+    })?;
+
+    if !output.status.success() {
+        return Err(command_failure("PowerShell GPU metadata probe", &output));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let Some(first_line) = stdout.lines().find(|line| !line.trim().is_empty()) else {
+        return Err("PowerShell GPU metadata probe returned no rows".to_string());
+    };
+
+    let mut parts = first_line.split('|');
+    let model = parts
+        .next()
+        .map(str::trim)
+        .map(str::to_string)
+        .filter(|value| !value.is_empty());
+    let vram_gb = parts
+        .next()
+        .and_then(|value| value.trim().parse::<f32>().ok())
+        .filter(|bytes| bytes.is_finite() && *bytes > 0.0)
+        .map(|bytes| bytes / 1024.0 / 1024.0 / 1024.0);
+
+    Ok(GpuProbe {
+        model,
+        vram_gb,
+        ..GpuProbe::default()
+    })
+}
+
+#[cfg(not(windows))]
+fn probe_windows_gpu_metadata() -> Result<GpuProbe, String> {
+    Ok(GpuProbe::default())
+}
+
+#[cfg(windows)]
+fn probe_windows_cpu_model() -> Result<String, String> {
+    let mut command = Command::new("powershell.exe");
+    command.args([
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name",
+    ]);
+
+    let output = run_probe_command(&mut command)
+        .map_err(|error| format!("PowerShell CPU metadata probe could not be started: {}", error))?;
+
+    if !output.status.success() {
+        return Err(command_failure("PowerShell CPU metadata probe", &output));
+    }
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .find_map(|line| {
+            let model = line.trim();
+            (!model.is_empty()).then(|| model.to_string())
+        })
+        .ok_or_else(|| "PowerShell CPU metadata probe returned no rows".to_string())
+}
+
+#[cfg(not(windows))]
+fn probe_windows_cpu_model() -> Result<String, String> {
+    Ok(String::new())
+}
 
 #[tokio::main]
 async fn main() {
@@ -104,6 +302,34 @@ async fn main() {
         let mut prev_received = 0u64;
         let mut prev_transmitted = 0u64;
         let mut prev_time = Instant::now();
+        let mut history: VecDeque<HistorySample> = VecDeque::with_capacity(60);
+        let mut first_snapshot_logged = false;
+        let mut gpu_source = String::new();
+        let mut nvidia_failure_logged = false;
+        let cpu_model_fallback = match probe_windows_cpu_model() {
+            Ok(model) => {
+                if !model.is_empty() {
+                    log_info(format!("Windows CPU metadata detected: {}", model));
+                }
+                model
+            }
+            Err(error) => {
+                log_warn(format!("Windows CPU metadata unavailable: {}", error));
+                String::new()
+            }
+        };
+        let gpu_metadata = match probe_windows_gpu_metadata() {
+            Ok(metadata) => {
+                if let Some(model) = metadata.model.as_deref() {
+                    log_info(format!("Windows GPU metadata detected: {}", model));
+                }
+                metadata
+            }
+            Err(error) => {
+                log_warn(format!("Windows GPU metadata unavailable: {}", error));
+                GpuProbe::default()
+            }
+        };
 
         // Initial refresh
         sys.refresh_all();
@@ -128,7 +354,14 @@ async fn main() {
 
             // CPU
             let cpu_usage = sys.global_cpu_info().cpu_usage();
-            let cpu_model = sys.global_cpu_info().brand().to_string();
+            let cpu_model = {
+                let model = sys.global_cpu_info().brand().trim();
+                if model.is_empty() {
+                    cpu_model_fallback.clone()
+                } else {
+                    model.to_string()
+                }
+            };
             let cpu_cores = sys.cpus().len();
             let cpu_freq = sys.cpus().first().map(|c| c.frequency() as f32 / 1000.0); // MHz to GHz
 
@@ -156,7 +389,7 @@ async fn main() {
             // Network Metrics
             let mut total_rx = 0u64;
             let mut total_tx = 0u64;
-            let mut active_iface = "N/A".to_string();
+            let mut active_iface = None;
             let mut max_rx = 0u64;
 
             for (name, data) in &networks {
@@ -168,7 +401,7 @@ async fn main() {
                 // Pick the interface with the most activity as active
                 if rx > max_rx {
                     max_rx = rx;
-                    active_iface = name.clone();
+                    active_iface = Some(name.clone());
                 }
             }
 
@@ -191,6 +424,27 @@ async fn main() {
             };
 
             let network_status = if total_rx > 0 { "online" } else { "offline" }.to_string();
+            let (gpu_probe, next_gpu_source) = match probe_nvidia_gpu() {
+                Ok(probe) => {
+                    nvidia_failure_logged = false;
+                    (probe, "nvidia-smi")
+                }
+                Err(error) => {
+                    if !nvidia_failure_logged {
+                        log_warn(format!(
+                            "NVIDIA telemetry unavailable; using Windows GPU metadata where possible: {}",
+                            error
+                        ));
+                        nvidia_failure_logged = true;
+                    }
+                    (gpu_metadata.clone(), "windows-metadata")
+                }
+            };
+
+            if gpu_source != next_gpu_source {
+                log_info(format!("GPU telemetry source: {}", next_gpu_source));
+                gpu_source = next_gpu_source.to_string();
+            }
 
             // Storage
             let mut storage = Vec::new();
@@ -213,7 +467,8 @@ async fn main() {
                     sysinfo::DiskKind::SSD => "SSD",
                     sysinfo::DiskKind::HDD => "HDD",
                     _ => "Disk",
-                }.to_string();
+                }
+                .to_string();
 
                 storage.push(StorageInfo {
                     name: if name.is_empty() { mount.clone() } else { name },
@@ -225,9 +480,22 @@ async fn main() {
                 });
             }
 
+            let timestamp = chrono::Utc::now().to_rfc3339();
+            history.push_back(HistorySample {
+                timestamp: timestamp.clone(),
+                cpu_usage_percent: cpu_usage,
+                memory_usage_percent: mem_usage_percent,
+                gpu_usage_percent: gpu_probe.usage_percent,
+                download_mbps,
+                upload_mbps,
+            });
+            while history.len() > 60 {
+                history.pop_front();
+            }
+
             // Create Snapshot
             let snapshot = HardwareSnapshot {
-                timestamp: chrono::Utc::now().to_rfc3339(),
+                timestamp,
                 cpu: CpuInfo {
                     usage_percent: cpu_usage,
                     temperature_c: cpu_temp,
@@ -241,10 +509,10 @@ async fn main() {
                     total_gb,
                 },
                 gpu: GpuInfo {
-                    usage_percent: None,
-                    temperature_c: None,
-                    model: "N/A".to_string(),
-                    vram_gb: None,
+                    usage_percent: gpu_probe.usage_percent,
+                    temperature_c: gpu_probe.temperature_c,
+                    model: gpu_probe.model,
+                    vram_gb: gpu_probe.vram_gb,
                 },
                 network: NetworkInfo {
                     status: network_status,
@@ -253,11 +521,16 @@ async fn main() {
                     upload_mbps,
                 },
                 storage,
+                history: history.iter().cloned().collect(),
             };
 
             // Write state
             let mut lock = state_clone.write().await;
             *lock = Some(snapshot);
+            if !first_snapshot_logged {
+                log_info("System metrics are live; rolling history is collecting 60 samples");
+                first_snapshot_logged = true;
+            }
         }
     });
 
@@ -266,20 +539,38 @@ async fn main() {
         .route("/api/sysinfo", get(sysinfo_handler))
         .route("/api/projects", get(projects_handler))
         .route("/api/projects/:project_id/add", post(add_entry_handler))
-        .route("/api/projects/:project_id/toggle/:line", post(toggle_entry_handler))
-        .route("/api/projects/:project_id/update/:line", put(update_entry_handler))
-        .route("/api/projects/:project_id/delete/:line", delete(delete_entry_handler))
+        .route(
+            "/api/projects/:project_id/toggle/:line",
+            post(toggle_entry_handler),
+        )
+        .route(
+            "/api/projects/:project_id/update/:line",
+            put(update_entry_handler),
+        )
+        .route(
+            "/api/projects/:project_id/delete/:line",
+            delete(delete_entry_handler),
+        )
         .layer(CorsLayer::permissive())
         .with_state(state);
 
     let addr = "127.0.0.1:9999";
-    println!("Dashboard daemon starting on http://{}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    log_info(format!("Dashboard daemon starting on http://{}", addr));
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(error) => {
+            log_error(format!("Could not bind {}: {}", addr, error));
+            return;
+        }
+    };
+
+    if let Err(error) = axum::serve(listener, app).await {
+        log_error(format!("Dashboard daemon stopped: {}", error));
+    }
 }
 
 async fn sysinfo_handler(
-    State(state): State<SharedState>
+    State(state): State<SharedState>,
 ) -> Result<impl IntoResponse, (axum::http::StatusCode, String)> {
     let lock = state.read().await;
     match &*lock {
@@ -289,10 +580,7 @@ async fn sysinfo_handler(
                 header::CACHE_CONTROL,
                 HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
             );
-            headers.insert(
-                header::PRAGMA,
-                HeaderValue::from_static("no-cache"),
-            );
+            headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
             Ok((headers, Json(snapshot.clone())))
         }
         None => Err((
@@ -305,7 +593,9 @@ async fn sysinfo_handler(
 // --- REPOTASKS API LOGIC ---
 
 fn repotasks_projects_file() -> Result<PathBuf, String> {
-    let dir = dirs::config_dir().ok_or("Could not determine config dir")?.join("com.repotasks.app");
+    let dir = dirs::config_dir()
+        .ok_or("Could not determine config dir")?
+        .join("com.repotasks.app");
     Ok(dir.join("projects.json"))
 }
 
@@ -367,9 +657,10 @@ async fn add_entry_handler(
 
     let project = find_project(&project_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     let note_path = std::path::Path::new(&project.path).join("NOTES.md");
-    
+
     let content = if note_path.exists() {
-        fs::read_to_string(&note_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        fs::read_to_string(&note_path)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     } else {
         format!("# {} — Notes\n\n## Inbox\n\n## Notes\n", project.name)
     };
@@ -378,7 +669,8 @@ async fn add_entry_handler(
     let line = notes::format_entry(text, payload.is_todo, &stamp);
     let updated = notes::append_to_inbox(&content, &line);
 
-    fs::write(&note_path, updated).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    fs::write(&note_path, updated)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::OK)
 }
@@ -398,7 +690,9 @@ async fn update_entry_handler(
     Path((project_id, line)): Path<(String, usize)>,
     Json(payload): Json<UpdateEntryPayload>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    rewrite_notes(&project_id, |c| notes::update_text_at(c, line, &payload.text))
+    rewrite_notes(&project_id, |c| {
+        notes::update_text_at(c, line, &payload.text)
+    })
 }
 
 async fn delete_entry_handler(
@@ -413,16 +707,17 @@ fn rewrite_notes(
 ) -> Result<StatusCode, (StatusCode, String)> {
     let project = find_project(project_id).map_err(|e| (StatusCode::NOT_FOUND, e))?;
     let note_path = std::path::Path::new(&project.path).join("NOTES.md");
-    
+
     if !note_path.exists() {
         return Err((StatusCode::NOT_FOUND, "NOTES.md not found".into()));
     }
 
-    let content = fs::read_to_string(&note_path).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let content = fs::read_to_string(&note_path)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let updated = f(&content).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    
-    fs::write(&note_path, updated).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    fs::write(&note_path, updated)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::OK)
 }
-

@@ -1,29 +1,33 @@
 <script>
   import { onMount } from 'svelte';
 
+  export let connectionStatus = 'loading';
+
   let timeString = '';
   let dateString = '';
   let greeting = '';
 
-  export let connectionStatus = 'loading';
-
-  function update() {
+  function updateClock() {
     const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    timeString = `${hours}:${minutes}`;
+    timeString = now.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    dateString = now.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    });
 
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    dateString = now.toLocaleDateString('en-US', options);
-
-    const h = now.getHours();
-    if (h < 5) {
+    const hour = now.getHours();
+    if (hour < 5) {
       greeting = 'Night';
-    } else if (h < 12) {
+    } else if (hour < 12) {
       greeting = 'Morning';
-    } else if (h < 17) {
+    } else if (hour < 17) {
       greeting = 'Afternoon';
-    } else if (h < 22) {
+    } else if (hour < 22) {
       greeting = 'Evening';
     } else {
       greeting = 'Night';
@@ -31,27 +35,25 @@
   }
 
   onMount(() => {
-    update();
-    const interval = setInterval(update, 1000);
+    updateClock();
+    const interval = setInterval(updateClock, 1000);
     return () => clearInterval(interval);
   });
 </script>
 
-<div class="text-center select-none py-8">
-  <div class="flex items-center justify-center gap-2 mb-3">
-    <span class="w-2 h-2 rounded-full animate-pulse transition-all duration-500
-      {connectionStatus === 'online' ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]' : 
-       connectionStatus === 'offline' ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]' : 
-       'bg-slate-500 shadow-[0_0_6px_rgba(100,116,139,0.5)]'}"
+<div class="clock-face">
+  <div class="clock-kicker">
+    <span
+      class="clock-dot"
+      class:online={connectionStatus === 'online'}
+      class:offline={connectionStatus === 'offline'}
     ></span>
-    <span class="text-xs text-slate-400 font-semibold tracking-widest uppercase">
-      Good {greeting}
-    </span>
+    <span>Good {greeting}</span>
   </div>
-  <h1 class="text-7xl md:text-8xl font-bold font-mono tracking-tight text-white time-glow">
-    {timeString}
-  </h1>
-  <p class="text-xl md:text-2xl text-slate-300 font-light mt-3">
-    {dateString}
-  </p>
+  <h1>{timeString}</h1>
+  <div class="date-line">
+    <span></span>
+    <p>{dateString}</p>
+    <span></span>
+  </div>
 </div>

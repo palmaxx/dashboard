@@ -1,266 +1,265 @@
 <script>
+  import { onMount } from 'svelte';
   import Clock from './components/Clock.svelte';
   import Stats from './components/Stats.svelte';
   import Bookmarks from './components/Bookmarks.svelte';
   import Todos from './components/Todos.svelte';
-  import { onMount } from 'svelte';
 
   const wallpapers = [
-    { url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1920&q=80', name: 'Yosemite' },
-    { url: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920&q=80', name: 'Forest Mist' },
-    { url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80', name: 'Starry Peaks' },
-    { url: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1920&q=80', name: 'Lake Sunset' },
-    { url: 'https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=1920&q=80', name: 'Mountain River' }
+    {
+      url: './wallpapers/command-mountain.png',
+      name: 'Command Mountain',
+    },
   ];
 
   let currentWallpaper = wallpapers[0].url;
   let showWallpaperPicker = false;
+  let customWallpaperUrl = '';
+  let activeView = 'hardware';
 
-  // Weather simulation
-  let temp = 22;
-  let condition = 'Partly Cloudy';
-  
-  function updateWeather() {
-    const temps = [18, 20, 22, 23, 25, 21, 19];
-    const conds = ['Sunny', 'Partly Cloudy', 'Clear Sky', 'Overcast', 'Light Breeze'];
-    temp = temps[Math.floor(Math.random() * temps.length)];
-    condition = conds[Math.floor(Math.random() * conds.length)];
+  let hardware = null;
+  let status = 'loading';
+  let lastUpdated = null;
+  let showStatusBar = true;
+  let hideStatusTimeout;
+
+  function storeWallpaper(url) {
+    try {
+      localStorage.setItem('dashWallpaper', url);
+    } catch (error) {
+      console.warn('Unable to persist wallpaper', error);
+    }
   }
 
   function setWallpaper(url) {
     currentWallpaper = url;
-    localStorage.setItem('dashWallpaper', url);
+    storeWallpaper(url);
     showWallpaperPicker = false;
   }
 
   function randomWallpaper() {
-    const remaining = wallpapers.filter(w => w.url !== currentWallpaper);
+    const remaining = wallpapers.filter((wallpaper) => wallpaper.url !== currentWallpaper);
     const chosen = remaining[Math.floor(Math.random() * remaining.length)] || wallpapers[0];
     setWallpaper(chosen.url);
   }
 
-  let customWallpaperUrl = '';
-
   function handleCustomUrlApply() {
-    if (customWallpaperUrl.trim()) {
-      setWallpaper(customWallpaperUrl.trim());
-      customWallpaperUrl = '';
-    }
+    const trimmed = customWallpaperUrl.trim();
+    if (!trimmed) return;
+    setWallpaper(trimmed);
+    customWallpaperUrl = '';
   }
 
   function handleFileUpload(event) {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      alert("Image is too large! Please choose an image under 2MB to fit in browser storage.");
+      alert('Image is too large. Please choose an image under 2MB.');
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
-      setWallpaper(e.target.result);
+    reader.onload = (loadEvent) => {
+      if (loadEvent.target?.result) {
+        setWallpaper(loadEvent.target.result);
+      }
     };
     reader.readAsDataURL(file);
   }
 
-  // System metrics state and polling
-  let hardware = null;
-  let status = 'loading'; // 'loading' | 'online' | 'offline'
-  let lastUpdated = null;
-  let showStatusBar = true;
-  let hideStatusTimeout = null;
+  function flashStatusBar() {
+    showStatusBar = true;
+    if (hideStatusTimeout) {
+      clearTimeout(hideStatusTimeout);
+    }
+    hideStatusTimeout = setTimeout(() => {
+      if (status === 'online') {
+        showStatusBar = false;
+      }
+    }, 4200);
+  }
 
   async function fetchSystemInfo() {
     try {
-      const res = await fetch('http://127.0.0.1:9999/api/sysinfo', { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        hardware = data;
-        lastUpdated = new Date();
-        
-        if (status !== 'online') {
-          status = 'online';
-          showStatusBar = true;
-          if (hideStatusTimeout) clearTimeout(hideStatusTimeout);
-          hideStatusTimeout = setTimeout(() => {
-            showStatusBar = false;
-          }, 5000);
-        }
-      } else {
-        handleOffline();
+      const response = await fetch('http://127.0.0.1:9999/api/sysinfo', { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Daemon returned ${response.status}`);
       }
-    } catch (err) {
-      handleOffline();
+
+      hardware = await response.json();
+      lastUpdated = new Date();
+      if (status !== 'online') {
+        status = 'online';
+        flashStatusBar();
+      } else {
+        status = 'online';
+      }
+    } catch (error) {
+      if (status !== 'offline') {
+        status = 'offline';
+        flashStatusBar();
+      } else {
+        status = 'offline';
+      }
     }
   }
 
-  function handleOffline() {
-    if (status !== 'offline') {
-      status = 'offline';
-      showStatusBar = true;
-      if (hideStatusTimeout) {
-        clearTimeout(hideStatusTimeout);
-        hideStatusTimeout = null;
-      }
+  function handleGlobalKeydown(event) {
+    if (event.key === 'Escape' && showWallpaperPicker) {
+      showWallpaperPicker = false;
     }
   }
 
   onMount(() => {
-    const saved = localStorage.getItem('dashWallpaper');
-    if (saved) {
-      currentWallpaper = saved;
+    try {
+      const storedWallpaper = localStorage.getItem('dashWallpaper');
+      if (storedWallpaper) {
+        currentWallpaper = storedWallpaper;
+      }
+    } catch (error) {
+      console.warn('Unable to read saved wallpaper', error);
     }
-    updateWeather();
 
-    // Initial query
     fetchSystemInfo();
-    // Query every 3 seconds
-    const intervalId = setInterval(fetchSystemInfo, 3000);
+
+    const hardwareInterval = setInterval(fetchSystemInfo, 3000);
 
     return () => {
-      clearInterval(intervalId);
-      if (hideStatusTimeout) clearTimeout(hideStatusTimeout);
+      clearInterval(hardwareInterval);
+      if (hideStatusTimeout) {
+        clearTimeout(hideStatusTimeout);
+      }
     };
   });
-
-  // Tab state for switching between Stats and Bookmarks
-  let activeTab = 'stats'; // 'stats' | 'bookmarks'
 </script>
 
-<svelte:window on:keydown={(e) => e.key === 'Escape' && showWallpaperPicker && (showWallpaperPicker = false)} />
+<svelte:window on:keydown={handleGlobalKeydown} />
 
-<main class="min-h-screen text-slate-200 bg-[#0a0a0f] relative font-sans pb-10">
-  
-  <!-- Hero Section with Background Wallpaper -->
-  <div class="relative w-full h-[52vh] min-h-[340px] bg-cover bg-center transition-all duration-700"
-       style="background-image: url('{currentWallpaper}')"
-  >
-    <!-- Dark overlay with smooth gradient fade to the background around the boxes -->
-    <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-black/15 via-[#0a0a0f]/85 to-[#0a0a0f]"></div>
-    
-    <!-- Time, Date, and Greeting (shifted up to prevent collision with overlapping cards) -->
-    <div class="absolute inset-0 flex flex-col items-center justify-center pb-32 z-10 px-4">
-      <Clock connectionStatus={status} />
-      
-      <!-- Weather Badge -->
-      <div class="flex items-center gap-4 text-xs font-semibold text-slate-300 mt-2 bg-black/30 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/5 select-none">
-        <span><i class="fa fa-thermometer-half mr-1.5 text-indigo-400"></i> {temp}°C</span>
-        <span class="w-1.5 h-1.5 bg-slate-600 rounded-full"></span>
-        <span><i class="fa fa-cloud mr-1.5 text-sky-400"></i> {condition}</span>
+<main class="deck-app">
+  <section class="hero-shell" style={`background-image: linear-gradient(180deg, rgba(6, 10, 14, 0.16), rgba(6, 10, 14, 0.68)), url("${currentWallpaper}")`}>
+    <div class="hero-topline">
+      <a href="./index.html" class="brand-mark" aria-label="Sleek Dashboard home">
+        <span class="brand-glyph">SD</span>
+        <span>Sleek Dashboard</span>
+      </a>
+
+      <div class="hero-actions">
+        <button type="button" class="icon-action wide" on:click={() => (showWallpaperPicker = true)}>
+          <i class="fa fa-picture-o" aria-hidden="true"></i>
+          <span>Wallpaper</span>
+        </button>
+        <button type="button" class="icon-action" aria-label="Shuffle wallpaper" title="Shuffle wallpaper" on:click={randomWallpaper}>
+          <i class="fa fa-random" aria-hidden="true"></i>
+        </button>
       </div>
     </div>
-    
-    <!-- Wallpaper Picker Controls (Moved to top-right to avoid collisions) -->
-    <div class="absolute top-4 right-4 z-20 flex items-center gap-2">
-      <button on:click={() => showWallpaperPicker = true} 
-              class="glass px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition flex items-center gap-2 select-none"
-      >
-        <i class="fa fa-picture-o"></i> Wallpaper
-      </button>
-      <button on:click={randomWallpaper} 
-              class="glass px-3.5 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/10 hover:text-white transition select-none"
-              title="Shuffle wallpaper"
-      >
-        <i class="fa fa-refresh"></i>
-      </button>
-    </div>
-  </div>
 
-  <!-- Wallpaper Picker Modal -->
+    <div class="hero-center">
+      <Clock connectionStatus={status} />
+    </div>
+
+    <div class="daemon-pill" class:online={status === 'online'} class:offline={status === 'offline'}>
+      <span></span>
+      {#if status === 'online'}
+        Local Daemon Connected
+      {:else if status === 'offline'}
+        Local Daemon Offline
+      {:else}
+        Connecting to Local Daemon
+      {/if}
+    </div>
+  </section>
+
+  <section class="deck-workspace">
+    <nav class="command-rail" aria-label="Dashboard sections">
+      <button
+        type="button"
+        class:active={activeView === 'hardware'}
+        aria-pressed={activeView === 'hardware'}
+        on:click={() => (activeView = 'hardware')}
+      >
+        <i class="fa fa-tachometer" aria-hidden="true"></i>
+        <span>Hardware</span>
+      </button>
+      <button
+        type="button"
+        class:active={activeView === 'bookmarks'}
+        aria-pressed={activeView === 'bookmarks'}
+        on:click={() => (activeView = 'bookmarks')}
+      >
+        <i class="fa fa-bookmark-o" aria-hidden="true"></i>
+        <span>Bookmarks</span>
+      </button>
+      <div class="rail-spacer"></div>
+    </nav>
+
+    <div class="workspace-grid" class:bookmark-focus={activeView === 'bookmarks'}>
+      {#if activeView === 'hardware'}
+        <section class="primary-stack" aria-label="Hardware dashboard">
+          <Stats {hardware} {status} {lastUpdated} {showStatusBar} />
+        </section>
+        <aside class="side-stack" aria-label="Quick access and projects">
+          <Bookmarks variant="compact" />
+          <Todos variant="compact" />
+        </aside>
+      {:else}
+        <section class="primary-stack" aria-label="Bookmarks dashboard">
+          <Bookmarks variant="full" />
+        </section>
+        <aside class="side-stack" aria-label="System and projects summary">
+          <Stats {hardware} {status} {lastUpdated} {showStatusBar} compact />
+          <Todos variant="compact" />
+        </aside>
+      {/if}
+    </div>
+  </section>
+
   {#if showWallpaperPicker}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-         on:click|self={() => showWallpaperPicker = false}
-    >
-      <div class="glass rounded-2xl p-6 max-w-xl w-full mx-4 max-h-[85vh] overflow-y-auto border border-white/10">
-        <div class="flex items-center justify-between mb-4 select-none">
-          <h3 class="text-base font-bold text-white">Choose Background</h3>
-          <button on:click={() => showWallpaperPicker = false} 
-                  class="text-slate-400 hover:text-white transition"
-                  title="Close"
-          >
-            <i class="fa fa-times text-lg"></i>
+    <div class="modal-backdrop" on:click|self={() => (showWallpaperPicker = false)}>
+      <section class="wallpaper-modal" aria-label="Choose wallpaper">
+        <header class="modal-header">
+          <div>
+            <p>Visual System</p>
+            <h2>Choose Background</h2>
+          </div>
+          <button type="button" class="icon-action" aria-label="Close wallpaper picker" on:click={() => (showWallpaperPicker = false)}>
+            <i class="fa fa-times" aria-hidden="true"></i>
           </button>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {#each wallpapers as w}
-            <button on:click={() => setWallpaper(w.url)} 
-                    class="group relative aspect-video rounded-xl overflow-hidden border-2 transition-all duration-300
-                           {currentWallpaper === w.url ? 'border-indigo-500' : 'border-transparent hover:border-slate-500'}"
+        </header>
+
+        <div class="wallpaper-grid">
+          {#each wallpapers as wallpaper}
+            <button
+              type="button"
+              class:active={currentWallpaper === wallpaper.url}
+              on:click={() => setWallpaper(wallpaper.url)}
             >
-              <img src={w.url} alt={w.name} class="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-              <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-2 select-none">
-                <span class="text-[10px] font-bold text-white truncate">{w.name}</span>
-              </div>
+              <img src={wallpaper.url} alt={wallpaper.name} />
+              <span>{wallpaper.name}</span>
             </button>
           {/each}
         </div>
 
-        <!-- Custom Wallpaper Section -->
-        <div class="mt-6 border-t border-white/5 pt-4 text-left">
-          <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Use Custom Background</h4>
-          <div class="flex flex-col gap-3">
-            <!-- File Upload -->
-            <div class="flex items-center gap-2">
-              <label class="glass px-3.5 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/10 hover:text-white cursor-pointer select-none">
-                <i class="fa fa-upload mr-1.5"></i> Upload Image
-                <input type="file" accept="image/*" on:change={handleFileUpload} class="hidden" />
-              </label>
-              <span class="text-[10px] text-slate-500">Max size: 2MB</span>
-            </div>
-
-            <!-- URL Input -->
-            <div class="flex gap-2">
-              <input type="text" bind:value={customWallpaperUrl} placeholder="Paste image URL (e.g. from Unsplash)..."
-                     class="flex-1 bg-white/5 border border-white/5 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-indigo-500/50 outline-none transition"
-              />
-              <button on:click={handleCustomUrlApply}
-                      class="bg-indigo-500 hover:bg-indigo-600 text-slate-950 font-bold text-xs rounded-xl px-4 py-2 transition"
-              >
-                Apply
-              </button>
-            </div>
+        <div class="custom-wallpaper">
+          <label>
+            <span>Upload Image</span>
+            <input type="file" accept="image/*" on:change={handleFileUpload} />
+          </label>
+          <div class="url-entry">
+            <input
+              type="text"
+              bind:value={customWallpaperUrl}
+              aria-label="Image URL"
+              on:keydown={(event) => event.key === 'Enter' && handleCustomUrlApply()}
+            />
+            <button type="button" on:click={handleCustomUrlApply}>Apply</button>
           </div>
+          <p>Uploads are stored in browser storage. Keep files under 2MB.</p>
         </div>
-      </div>
+      </section>
     </div>
   {/if}
-
-  <!-- Main Content Dashboard Container (Pulled higher on faded wallpaper background) -->
-  <div class="max-w-7xl mx-auto px-4 pb-12 -mt-20 relative z-20">
-    
-    <!-- Tab Navigation -->
-    <div class="flex justify-center mb-6">
-      <div class="glass p-1 rounded-2xl flex gap-1 bg-black/20 backdrop-blur-md border border-white/10">
-        <button 
-          on:click={() => activeTab = 'stats'}
-          class="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 {activeTab === 'stats' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}"
-        >
-          <i class="fa fa-microchip mr-2"></i> Hardware Stats
-        </button>
-        <button 
-          on:click={() => activeTab = 'bookmarks'}
-          class="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 {activeTab === 'bookmarks' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}"
-        >
-          <i class="fa fa-bookmark mr-2"></i> Bookmarks
-        </button>
-      </div>
-    </div>
-
-    <!-- Tab Content -->
-    <div class="transition-all duration-500">
-      {#if activeTab === 'stats'}
-        <Stats {hardware} {status} {lastUpdated} {showStatusBar} />
-      {:else if activeTab === 'bookmarks'}
-        <Bookmarks />
-      {/if}
-    </div>
-
-    <div class="mt-8">
-      <Todos />
-    </div>
-  </div>
-
 </main>

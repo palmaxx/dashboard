@@ -13,17 +13,6 @@ pub struct Project {
     pub added_at: String,
 }
 
-/// The sidecar `.repotasks.json` written into each imported repo.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RepoConfig {
-    pub id: String,
-    pub name: String,
-    pub color: String,
-    pub created_at: String,
-    pub note_file: String,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum EntryKind {
