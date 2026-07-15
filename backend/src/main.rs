@@ -195,6 +195,13 @@ fn command_failure(label: &str, output: &std::process::Output) -> String {
     }
 }
 
+fn megabytes_per_second(bytes: u64, elapsed_seconds: f32) -> f32 {
+    if elapsed_seconds <= 0.0 || !elapsed_seconds.is_finite() {
+        return 0.0;
+    }
+    (bytes as f32 / 1024.0 / 1024.0) / elapsed_seconds
+}
+
 fn classify_exposure(address: &str) -> &'static str {
     let clean = address.trim().trim_matches(['[', ']']);
     let lower = clean.to_ascii_lowercase();
@@ -542,10 +549,8 @@ async fn main() {
         let mut networks = Networks::new_with_refreshed_list();
         let mut components = Components::new_with_refreshed_list();
 
-        let mut prev_received = 0u64;
-        let mut prev_transmitted = 0u64;
         let mut prev_time = Instant::now();
-        let mut history: VecDeque<HistorySample> = VecDeque::with_capacity(60);
+        let mut history: VecDeque<HistorySample> = VecDeque::with_capacity(150);
         let mut first_snapshot_logged = false;
         let mut gpu_source = String::new();
         let mut nvidia_failure_logged = false;
@@ -576,11 +581,6 @@ async fn main() {
 
         // Initial refresh
         sys.refresh_all();
-        for (_, data) in &networks {
-            prev_received += data.received();
-            prev_transmitted += data.transmitted();
-        }
-
         loop {
             tokio::time::sleep(Duration::from_secs(2)).await;
 
@@ -589,6 +589,7 @@ async fn main() {
             sys.refresh_memory();
             disks.refresh_list();
             networks.refresh_list();
+            networks.refresh();
             components.refresh_list();
 
             let now = Instant::now();
@@ -633,7 +634,7 @@ async fn main() {
             let mut total_rx = 0u64;
             let mut total_tx = 0u64;
             let mut active_iface = None;
-            let mut max_rx = 0u64;
+            let mut max_activity = 0u64;
 
             for (name, data) in &networks {
                 let rx = data.received();
@@ -641,32 +642,21 @@ async fn main() {
                 total_rx += rx;
                 total_tx += tx;
 
-                // Pick the interface with the most activity as active
-                if rx > max_rx {
-                    max_rx = rx;
+                let activity = rx.saturating_add(tx);
+                if active_iface.is_none() || activity > max_activity {
+                    max_activity = activity;
                     active_iface = Some(name.clone());
                 }
             }
 
-            let rx_bytes = total_rx.saturating_sub(prev_received);
-            let tx_bytes = total_tx.saturating_sub(prev_transmitted);
-
-            prev_received = total_rx;
-            prev_transmitted = total_tx;
-
-            let download_mbps = if elapsed > 0.0 {
-                (rx_bytes as f32 / 1024.0 / 1024.0) / elapsed
+            let download_mbps = megabytes_per_second(total_rx, elapsed);
+            let upload_mbps = megabytes_per_second(total_tx, elapsed);
+            let network_status = if active_iface.is_some() {
+                "online"
             } else {
-                0.0
-            };
-
-            let upload_mbps = if elapsed > 0.0 {
-                (tx_bytes as f32 / 1024.0 / 1024.0) / elapsed
-            } else {
-                0.0
-            };
-
-            let network_status = if total_rx > 0 { "online" } else { "offline" }.to_string();
+                "offline"
+            }
+            .to_string();
             let (gpu_probe, next_gpu_source) = match probe_nvidia_gpu() {
                 Ok(probe) => {
                     nvidia_failure_logged = false;
@@ -732,7 +722,7 @@ async fn main() {
                 download_mbps,
                 upload_mbps,
             });
-            while history.len() > 60 {
+            while history.len() > 150 {
                 history.pop_front();
             }
 
@@ -771,7 +761,7 @@ async fn main() {
             let mut lock = state_clone.write().await;
             *lock = Some(snapshot);
             if !first_snapshot_logged {
-                log_info("System metrics are live; rolling history is collecting 60 samples");
+                log_info("System metrics are live; rolling history is collecting 150 samples");
                 first_snapshot_logged = true;
             }
         }
@@ -990,6 +980,12 @@ fn rewrite_notes(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn converts_network_deltas_to_megabytes_per_second() {
+        assert!((megabytes_per_second(2 * 1024 * 1024, 2.0) - 1.0).abs() < f32::EPSILON);
+        assert_eq!(megabytes_per_second(1024, 0.0), 0.0);
+    }
 
     #[test]
     fn classifies_bind_exposure() {

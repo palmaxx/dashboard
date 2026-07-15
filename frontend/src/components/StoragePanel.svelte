@@ -11,8 +11,8 @@
 <section class="card">
   <div class="card-header">
     <div>
-      <p class="label">Local Drives</p>
       <h2>Storage</h2>
+      <p>Local drive capacity</p>
     </div>
     <span class="vol-count">{storage.length} volumes</span>
   </div>
@@ -43,12 +43,29 @@
 </section>
 
 <style>
+  .card {
+    background: var(--surface);
+  }
+
+  .card-header {
+    min-height: 4.5rem;
+    background: var(--surface-raised);
+  }
+
+  .card-header p {
+    margin-top: var(--sp-1);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+  }
+
   .vol-count {
-    font-size: 12px;
-    color: var(--text-tertiary);
     padding: var(--sp-1) var(--sp-2);
-    border: 1px solid var(--glass-border);
+    border: 0.0625rem solid var(--line);
     border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
   }
 
   .vol-list {
@@ -57,34 +74,36 @@
   }
 
   .vol-row {
-    display: flex;
+    display: grid;
+    min-height: 4.25rem;
+    grid-template-columns: minmax(8rem, 0.9fr) minmax(8rem, 1.7fr) auto auto;
     align-items: center;
     gap: var(--sp-4);
     padding: var(--sp-3) var(--sp-5);
-    border-bottom: 1px solid var(--glass-border);
+    border-bottom: 0.0625rem solid var(--line);
   }
 
   .vol-row:last-child { border-bottom: none; }
 
   .vol-info {
-    min-width: 120px;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
 
   .vol-info strong {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
     overflow: hidden;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .vol-info span {
-    font-size: 11px;
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
   }
 
   .vol-bar {
@@ -93,30 +112,43 @@
   }
 
   .bar-track {
-    height: 6px;
-    border-radius: 3px;
-    background: rgba(255,255,255,0.08);
+    height: 0.5rem;
     overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--line);
   }
 
   .bar-fill {
     height: 100%;
-    border-radius: 3px;
     background: var(--accent);
-    transition: width 400ms ease;
   }
 
   .vol-usage {
-    font-size: 12px;
     color: var(--text-secondary);
+    font-size: 0.75rem;
     white-space: nowrap;
   }
 
   .vol-pct {
-    font-size: 13px;
-    font-weight: 600;
     color: var(--text-primary);
-    min-width: 36px;
+    min-width: 2.5rem;
+    font-size: 0.875rem;
+    font-weight: 650;
     text-align: right;
+  }
+
+  @media (max-width: 40rem) {
+    .vol-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .vol-bar {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+
+    .vol-usage {
+      display: none;
+    }
   }
 </style>

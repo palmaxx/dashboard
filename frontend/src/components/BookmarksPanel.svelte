@@ -1,10 +1,7 @@
 <script>
   import { onMount } from 'svelte'
 
-  export let compact = false
-
-  const COLORS = ['#5eead4', '#4ade80', '#fbbf24', '#a78bfa', '#f87171']
-  const ICONS = ['◎', '⌁', '↗', '▣']
+  const COLORS = ['#3ddcff', '#56e39f', '#ffb84d', '#7d8cff', '#ff6b72']
 
   let pinned = []
   let chromeBookmarks = []
@@ -24,21 +21,23 @@
     try {
       const raw = localStorage.getItem('dashPins')
       pinned = raw ? JSON.parse(raw) : []
-    } catch { pinned = [] }
+    } catch {
+      pinned = []
+    }
   }
 
   function savePinned() {
     try { localStorage.setItem('dashPins', JSON.stringify(pinned)) }
-    catch { /* ignore */ }
+    catch {}
   }
 
   function addPin() {
     const name = newName.trim()
     let url = newUrl.trim()
     if (!name || !url) return
-    if (!/^https?:\/\//i.test(url)) url = `https://${url}`
-    const i = pinned.length
-    pinned = [...pinned, { id: `${Date.now()}`, name, url, icon: ICONS[i % ICONS.length], color: COLORS[i % COLORS.length] }]
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+    const index = pinned.length
+    pinned = [...pinned, { id: String(Date.now()), name, url, color: COLORS[index % COLORS.length] }]
     savePinned()
     newName = ''
     newUrl = ''
@@ -46,7 +45,7 @@
   }
 
   function removePin(id) {
-    pinned = pinned.filter(p => p.id !== id)
+    pinned = pinned.filter(pin => pin.id !== id)
     savePinned()
   }
 
@@ -56,22 +55,25 @@
       chrome.bookmarks.getTree(tree => {
         const items = []
         function walk(node, folder = 'Bookmarks') {
-          const f = node.title || folder
+          const nextFolder = node.title || folder
           if (node.url) items.push({ name: node.title || 'Untitled', url: node.url, folder })
-          if (node.children) node.children.forEach(c => walk(c, f))
+          if (node.children) node.children.forEach(child => walk(child, nextFolder))
         }
-        tree.forEach(n => walk(n))
+        tree.forEach(node => walk(node))
         chromeBookmarks = items
       })
     }
   }
 
   $: {
-    const limit = compact ? 6 : 16
-    const q = query.trim().toLowerCase()
-    filtered = q
-      ? chromeBookmarks.filter(b => (b.name||'').toLowerCase().includes(q) || (b.url||'').toLowerCase().includes(q)).slice(0, limit)
-      : chromeBookmarks.slice(0, limit)
+    const normalized = query.trim().toLowerCase()
+    const matches = normalized
+      ? chromeBookmarks.filter(bookmark =>
+          (bookmark.name || '').toLowerCase().includes(normalized) ||
+          (bookmark.url || '').toLowerCase().includes(normalized)
+        )
+      : chromeBookmarks
+    filtered = matches.slice(0, normalized ? 16 : 12)
   }
 
   onMount(() => {
@@ -80,61 +82,84 @@
   })
 </script>
 
-<section class="card">
-  <div class="card-header">
+<section class="card bookmarks-panel">
+  <header class="panel-header">
     <div>
-      <p class="label">{isExtension ? 'Chrome Bookmarks' : 'Bookmarks'}</p>
       <h2>Bookmarks</h2>
+      <p>{isExtension ? chromeBookmarks.length + ' Chrome bookmarks' : 'Pinned shortcuts remain available'}</p>
     </div>
-    <button class="btn-icon" on:click={() => (showAddForm = !showAddForm)} aria-label="Add shortcut" title="Add shortcut">+</button>
-  </div>
+    <button
+      class="add-button"
+      type="button"
+      on:click={() => (showAddForm = !showAddForm)}
+      aria-expanded={showAddForm}
+      aria-controls="add-shortcut-form"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      <span>Add</span>
+    </button>
+  </header>
 
   <div class="shortcuts">
-    <div class="section-label">
-      <span>⌖</span> Pinned Shortcuts
+    <div class="subhead">
+      <h3>Pinned shortcuts</h3>
+      <span>{pinned.length}</span>
     </div>
 
     {#if showAddForm}
-      <form class="add-form" on:submit|preventDefault={addPin}>
-        <input class="input" type="text" placeholder="Name" bind:value={newName} />
-        <input class="input" type="text" placeholder="URL" bind:value={newUrl} />
-        <button class="btn btn-accent" type="submit">Add</button>
+      <form id="add-shortcut-form" class="add-form" on:submit|preventDefault={addPin}>
+        <label>
+          <span>Name</span>
+          <input class="input" type="text" autocomplete="off" bind:value={newName} />
+        </label>
+        <label>
+          <span>URL</span>
+          <input class="input" type="url" inputmode="url" autocomplete="url" bind:value={newUrl} />
+        </label>
+        <button class="btn btn-accent" type="submit">Save shortcut</button>
       </form>
     {/if}
 
     {#if pinned.length}
-      <div class="pin-grid" class:compact>
+      <div class="pin-grid">
         {#each pinned as pin}
-          <a href={pin.url} target="_blank" rel="noopener noreferrer" class="pin" style="--pin-color: {pin.color}">
-            <button class="pin-remove" on:click|preventDefault|stopPropagation={() => removePin(pin.id)} aria-label="Remove {pin.name}">✕</button>
-            <span class="pin-icon">{pin.icon}</span>
-            <strong>{pin.name}</strong>
-          </a>
+          <div class="pin-wrap" style="--pin-color: {pin.color || COLORS[0]}">
+            <a href={pin.url} title={pin.name} class="pin">
+              <span class="pin-initial">{(pin.name || '?')[0].toUpperCase()}</span>
+              <strong>{pin.name}</strong>
+            </a>
+            <button class="pin-remove" type="button" on:click={() => removePin(pin.id)} aria-label="Remove {pin.name}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"></path></svg>
+            </button>
+          </div>
         {/each}
       </div>
     {:else}
-      <p class="empty-hint">No pinned shortcuts. Click + to add one.</p>
+      <button class="empty-action" type="button" on:click={() => (showAddForm = true)}>Add your first shortcut</button>
     {/if}
   </div>
 
-  <div class="bm-search">
-    <div class="search-bar">
-      <span class="search-icon">⌕</span>
-      <input class="input" type="text" placeholder="Search bookmarks…" bind:value={query} />
-      <span class="bm-count">{chromeBookmarks.length}</span>
-    </div>
+  <div class="bookmark-search">
+    <label class="search">
+      <span class="sr-only">Search bookmarks</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+      <input type="search" placeholder="Search bookmarks" bind:value={query} />
+      <span class="count">{filtered.length}</span>
+    </label>
 
-    <div class="bm-list">
-      {#each filtered as bm}
-        <a href={bm.url} target="_blank" rel="noopener noreferrer" class="bm-row">
-          <span class="bm-initial">{(bm.name || '?')[0]}</span>
-          <strong title={bm.name}>{bm.name || 'Untitled'}</strong>
-          <small title={bm.url}>{hostname(bm.url)}</small>
-          <em>{bm.folder || 'Bookmarks'}</em>
+    <div class="bookmark-list">
+      {#each filtered as bookmark}
+        <a href={bookmark.url} class="bookmark-row">
+          <span class="bookmark-initial">{(bookmark.name || '?')[0].toUpperCase()}</span>
+          <span class="bookmark-copy">
+            <strong title={bookmark.name}>{bookmark.name || 'Untitled'}</strong>
+            <small title={bookmark.url}>{hostname(bookmark.url)}</small>
+          </span>
+          <span class="folder">{bookmark.folder || 'Bookmarks'}</span>
         </a>
       {:else}
-        <p class="empty-hint">
-          {isExtension ? 'No matching bookmarks.' : 'Chrome bookmarks available when installed as extension.'}
+        <p class="bookmark-empty">
+          {isExtension ? 'No bookmarks match this search.' : 'Chrome bookmarks appear in the installed extension.'}
         </p>
       {/each}
     </div>
@@ -142,199 +167,309 @@
 </section>
 
 <style>
-  .shortcuts {
-    padding: var(--sp-3) var(--sp-4);
-    border-bottom: 1px solid var(--glass-border);
+  .bookmarks-panel {
+    background: var(--surface);
   }
 
-  .section-label {
+  .panel-header {
     display: flex;
+    min-height: 4.75rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    padding: var(--sp-4) var(--sp-5);
+    background: var(--accent-strong);
+    color: white;
+  }
+
+  .panel-header h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .panel-header p {
+    margin-top: var(--sp-1);
+    color: rgb(255 255 255 / 0.82);
+    font-size: 0.875rem;
+  }
+
+  .add-button {
+    display: inline-flex;
+    min-height: 2.75rem;
     align-items: center;
     gap: var(--sp-2);
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    padding: var(--sp-2) var(--sp-3);
+    border: 0.0625rem solid rgb(255 255 255 / 0.4);
+    border-radius: var(--radius-md);
+    background: rgb(3 7 15 / 0.2);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 650;
+  }
+
+  .add-button:hover {
+    background: rgb(3 7 15 / 0.38);
+  }
+
+  .add-button svg,
+  .pin-remove svg,
+  .search svg {
+    width: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+  }
+
+  .shortcuts {
+    padding: var(--sp-5);
+    border-bottom: 0.0625rem solid var(--line);
+  }
+
+  .subhead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
     margin-bottom: var(--sp-3);
+  }
+
+  .subhead h3 {
+    font-size: 1rem;
+    font-weight: 650;
+  }
+
+  .subhead span,
+  .count {
+    min-width: 1.75rem;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
   }
 
   .add-form {
-    display: flex;
-    gap: var(--sp-2);
-    margin-bottom: var(--sp-3);
+    display: grid;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
   }
 
-  .add-form .input { flex: 1; }
+  .add-form label {
+    display: grid;
+    gap: var(--sp-1);
+  }
+
+  .add-form label > span {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
 
   .pin-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--sp-2);
   }
 
-  .pin-grid.compact {
-    grid-template-columns: repeat(3, 1fr);
+  .pin-wrap {
+    position: relative;
+    min-width: 0;
   }
 
   .pin {
-    position: relative;
     display: flex;
+    min-height: 4.25rem;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: var(--sp-1);
-    padding: var(--sp-3) var(--sp-2);
-    border: 1px solid var(--glass-border);
+    padding: var(--sp-2);
+    border: 0.0625rem solid var(--line);
     border-radius: var(--radius-md);
-    background: var(--surface);
-    transition: all 200ms ease;
+    background: var(--surface-raised);
+    transition: border-color 180ms ease, background-color 180ms ease;
   }
 
   .pin:hover {
-    border-color: color-mix(in srgb, var(--pin-color) 50%, transparent);
+    border-color: var(--pin-color);
     background: var(--surface-hover);
-    transform: translateY(-2px);
   }
 
-  .pin-icon {
+  .pin-initial {
     display: grid;
-    width: 30px;
-    height: 30px;
+    width: 1.75rem;
+    height: 1.75rem;
     place-items: center;
     border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--pin-color) 20%, transparent);
-    color: var(--pin-color);
-    font-size: 16px;
+    background: var(--pin-color);
+    color: var(--bg);
+    font-size: 0.875rem;
+    font-weight: 750;
   }
 
   .pin strong {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-primary);
+    max-width: 100%;
     overflow: hidden;
+    font-size: 0.75rem;
+    font-weight: 650;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 100%;
-    text-align: center;
   }
 
   .pin-remove {
     position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 18px;
-    height: 18px;
+    top: var(--sp-1);
+    right: var(--sp-1);
     display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
     place-items: center;
-    border-radius: 4px;
-    background: rgba(248, 113, 113, 0.15);
-    border: 1px solid rgba(248, 113, 113, 0.2);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
     color: var(--red);
-    font-size: 9px;
     opacity: 0;
-    transition: opacity 150ms;
+    transition: opacity 150ms ease;
   }
 
-  .pin:hover .pin-remove { opacity: 1; }
-
-  .empty-hint {
-    font-size: 12px;
-    color: var(--text-tertiary);
-    padding: var(--sp-3) 0;
-    text-align: center;
+  .pin-wrap:hover .pin-remove,
+  .pin-wrap:focus-within .pin-remove {
+    opacity: 1;
   }
 
-  .bm-search {
+  .empty-action {
+    width: 100%;
+    min-height: 3.5rem;
+    border: 0.0625rem dashed var(--line-strong);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .empty-action:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+  }
+
+  .bookmark-search {
     display: flex;
     flex-direction: column;
   }
 
-  .search-bar {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-    padding: var(--sp-3) var(--sp-4);
-    border-bottom: 1px solid var(--glass-border);
-  }
-
-  .search-icon {
-    color: var(--text-tertiary);
-    font-size: 16px;
-  }
-
-  .search-bar .input {
-    flex: 1;
-    border: none;
-    background: transparent;
-    padding: 0;
-    min-height: auto;
-  }
-
-  .search-bar .input:focus { border-color: transparent; }
-
-  .bm-count {
-    font-size: 11px;
-    color: var(--text-tertiary);
-    padding: 2px 6px;
-    border: 1px solid var(--glass-border);
-    border-radius: 4px;
-  }
-
-  .bm-list {
-    max-height: 320px;
-    overflow-y: auto;
-  }
-
-  .bm-row {
-    display: flex;
+  .search {
+    display: grid;
+    min-height: 3.75rem;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: var(--sp-3);
-    padding: var(--sp-2) var(--sp-4);
-    border-bottom: 1px solid var(--glass-border);
-    transition: background 150ms;
-  }
-
-  .bm-row:hover { background: var(--surface-hover); }
-  .bm-row:last-child { border-bottom: none; }
-
-  .bm-initial {
-    width: 24px;
-    height: 24px;
-    display: grid;
-    place-items: center;
-    border-radius: 6px;
-    background: var(--surface);
-    font-size: 11px;
-    font-weight: 700;
+    padding: 0 var(--sp-5);
+    border-bottom: 0.0625rem solid var(--line);
     color: var(--text-secondary);
-    flex-shrink: 0;
   }
 
-  .bm-row strong {
-    flex: 1;
-    font-size: 13px;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .search input {
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 1rem;
   }
 
-  .bm-row small {
-    font-size: 11px;
+  .search input::placeholder {
     color: var(--text-tertiary);
-    max-width: 120px;
+    opacity: 1;
+  }
+
+  .bookmark-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .bookmark-row {
+    display: grid;
+    min-height: 3.5rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-5);
+    border-bottom: 0.0625rem solid var(--line);
+    transition: background-color 150ms ease;
+  }
+
+  .bookmark-row:hover {
+    background: var(--surface-hover);
+  }
+
+  .bookmark-row:last-child {
+    border-bottom: 0;
+  }
+
+  .bookmark-initial {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .bookmark-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .bookmark-copy strong,
+  .bookmark-copy small,
+  .folder {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .bm-row em {
-    font-size: 10px;
-    color: var(--text-tertiary);
-    font-style: normal;
-    max-width: 80px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .bookmark-copy strong {
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .bookmark-copy small,
+  .folder {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+  }
+
+  .folder {
+    max-width: 6rem;
+  }
+
+  .bookmark-empty {
+    padding: var(--sp-6) var(--sp-5);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-align: center;
+    text-wrap: pretty;
+  }
+
+  @media (hover: none) {
+    .pin-remove {
+      opacity: 1;
+    }
+  }
+
+  @media (max-width: 28rem) {
+    .pin-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .folder {
+      display: none;
+    }
   }
 </style>

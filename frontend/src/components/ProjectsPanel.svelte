@@ -48,8 +48,8 @@
 <section class="card">
   <div class="card-header">
     <div>
-      <p class="label">Projects</p>
-      <h2>Tasks & Notes</h2>
+      <h2>Projects</h2>
+      <p>Tasks and notes from repotasks</p>
     </div>
     <span class="active-badge">{totalActive} active</span>
   </div>
@@ -104,12 +104,28 @@
 </section>
 
 <style>
+  .card-header {
+    min-height: 4.75rem;
+    border-bottom: 0;
+    background: var(--accent-strong);
+    color: white;
+  }
+
+  .card-header p {
+    margin-top: var(--sp-1);
+    color: rgb(255 255 255 / 0.82);
+    font-size: 0.875rem;
+  }
+
   .active-badge {
-    font-size: 12px;
-    color: var(--text-secondary);
     padding: var(--sp-1) var(--sp-2);
-    border: 1px solid var(--glass-border);
+    border: 0.0625rem solid rgb(255 255 255 / 0.4);
     border-radius: var(--radius-sm);
+    background: rgb(3 7 15 / 0.2);
+    color: white;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
   }
 
   .project-list {
@@ -118,16 +134,17 @@
   }
 
   .project {
-    border-bottom: 1px solid var(--glass-border);
+    border-bottom: 0.0625rem solid var(--line);
   }
 
   .project:last-child { border-bottom: none; }
 
   .project-header {
     display: flex;
+    min-height: 3.5rem;
     align-items: center;
     gap: var(--sp-3);
-    padding: var(--sp-3) var(--sp-5);
+    padding: var(--sp-2) var(--sp-5);
     background: var(--surface);
   }
 
@@ -140,35 +157,39 @@
 
   .project-header h3 {
     flex: 1;
-    font-size: 14px;
+    overflow: hidden;
+    font-size: 0.875rem;
     font-weight: 600;
-    margin: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .count {
-    font-size: 11px;
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
   }
 
   .add-row {
     display: flex;
     gap: var(--sp-2);
     padding: var(--sp-2) var(--sp-5);
-    border-bottom: 1px solid var(--glass-border);
+    border-bottom: 0.0625rem solid var(--line);
   }
 
   .add-row .input { flex: 1; }
 
   .mode-toggle {
-    width: 32px;
-    height: 32px;
+    width: 2.75rem;
+    height: 2.75rem;
     display: grid;
     place-items: center;
-    border: 1px solid var(--glass-border);
+    border: 0.0625rem solid var(--line);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
-    font-size: 14px;
-    background: var(--surface);
+    background: var(--surface-raised);
+    font-size: 0.875rem;
   }
 
   .entries {
@@ -177,8 +198,8 @@
   }
 
   .empty-inline {
-    font-size: 12px;
-    color: var(--text-tertiary);
     padding: var(--sp-3) var(--sp-5);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
   }
 </style>

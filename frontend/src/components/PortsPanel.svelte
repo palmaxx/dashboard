@@ -22,27 +22,27 @@
 
   function processText(listener) {
     const hasPid = typeof listener.processId === 'number'
-    if (listener.processName && hasPid) return `${listener.processName} (${listener.processId})`
+    if (listener.processName && hasPid) return listener.processName + ' (' + listener.processId + ')'
     if (listener.processName) return listener.processName
-    if (hasPid) return `PID ${listener.processId}`
+    if (hasPid) return 'PID ' + listener.processId
     return 'Unknown'
   }
 </script>
 
 <section class="card ports-card">
-  <div class="card-header ports-header">
+  <header class="ports-header">
     <div>
-      <p class="label">Local Network</p>
-      <h2>Active Ports</h2>
+      <h2>Active ports</h2>
+      <p>Listening services on this machine</p>
     </div>
     <div class="header-actions">
       <span class="summary">{exposedCount} exposed / {listeners.length} total</span>
       <button class="btn btn-ghost" type="button" on:click={onRefresh} title="Refresh active ports">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2"/><path d="M3 12A9 9 0 0 1 18.5 5.8"/><path d="M18 2v4h4"/><path d="M6 22v-4H2"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2"></path><path d="M3 12A9 9 0 0 1 18.5 5.8"></path><path d="M18 2v4h4M6 22v-4H2"></path></svg>
         <span>Refresh</span>
       </button>
     </div>
-  </div>
+  </header>
 
   {#if status === 'offline' && listeners.length === 0}
     <div class="empty-state">
@@ -50,7 +50,7 @@
     </div>
   {:else if status === 'loading' && listeners.length === 0}
     <div class="empty-state">
-      <p>Scanning active ports...</p>
+      <p>Scanning active ports…</p>
     </div>
   {:else if listeners.length === 0}
     <div class="empty-state">
@@ -80,7 +80,7 @@
               <td><span class="badge {listener.exposure || 'unknown'}">{badgeText(listener.exposure)}</span></td>
               <td class="mono address" title={listener.localAddress}>{listener.localAddress}</td>
               <td class="mono port">{listener.port}</td>
-              <td class="proto">{listener.protocol}</td>
+              <td class="protocol">{listener.protocol}</td>
               <td class="process" title={processText(listener)}>{processText(listener)}</td>
             </tr>
           {/each}
@@ -92,11 +92,29 @@
 
 <style>
   .ports-card {
-    overflow: hidden;
+    background: var(--surface);
   }
 
   .ports-header {
+    display: flex;
+    min-height: 4.75rem;
     align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    padding: var(--sp-4) var(--sp-5);
+    border-bottom: 0.0625rem solid var(--line);
+    background: var(--surface-raised);
+  }
+
+  .ports-header h2 {
+    font-size: 1.25rem;
+    font-weight: 650;
+  }
+
+  .ports-header p {
+    margin-top: var(--sp-1);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
   }
 
   .header-actions {
@@ -105,12 +123,23 @@
     gap: var(--sp-3);
   }
 
+  .header-actions svg {
+    width: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+  }
+
   .summary {
-    font-size: 12px;
-    color: var(--text-secondary);
     padding: var(--sp-1) var(--sp-2);
-    border: 1px solid var(--glass-border);
+    border: 0.0625rem solid var(--line);
     border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
@@ -119,9 +148,9 @@
     justify-content: space-between;
     gap: var(--sp-3);
     padding: var(--sp-3) var(--sp-5);
-    color: var(--text-tertiary);
-    font-size: 12px;
-    border-bottom: 1px solid var(--glass-border);
+    border-bottom: 0.0625rem solid var(--line);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
   }
 
   .warn {
@@ -134,69 +163,62 @@
 
   table {
     width: 100%;
-    min-width: 720px;
+    min-width: 45rem;
     border-collapse: collapse;
   }
 
   th,
   td {
     padding: var(--sp-3) var(--sp-5);
-    border-bottom: 1px solid var(--glass-border);
+    border-bottom: 0.0625rem solid var(--line);
     text-align: left;
     vertical-align: middle;
   }
 
   th {
-    color: var(--text-tertiary);
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background: var(--surface);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 650;
   }
 
   td {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 0.875rem;
   }
 
   tbody tr:last-child td {
-    border-bottom: none;
+    border-bottom: 0;
   }
 
   .badge {
     display: inline-flex;
-    align-items: center;
-    min-width: 94px;
+    min-width: 6rem;
     justify-content: center;
-    padding: 3px var(--sp-2);
+    padding: var(--sp-1) var(--sp-2);
+    border: 0.0625rem solid currentColor;
     border-radius: var(--radius-sm);
-    font-size: 11px;
-    font-weight: 700;
+    background: var(--surface-raised);
+    font-size: 0.75rem;
+    font-weight: 650;
     white-space: nowrap;
   }
 
   .badge.lan {
     color: var(--red);
-    background: rgba(248, 113, 113, 0.12);
-    border: 1px solid rgba(248, 113, 113, 0.24);
   }
 
   .badge.local {
     color: var(--green);
-    background: rgba(74, 222, 128, 0.1);
-    border: 1px solid rgba(74, 222, 128, 0.22);
   }
 
   .badge.unknown {
     color: var(--amber);
-    background: rgba(251, 191, 36, 0.1);
-    border: 1px solid rgba(251, 191, 36, 0.22);
   }
 
   .address,
   .process {
-    max-width: 260px;
+    max-width: 16rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -207,14 +229,14 @@
     font-weight: 700;
   }
 
-  .proto {
+  .protocol {
     color: var(--text-primary);
-    text-transform: uppercase;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 700;
+    text-transform: uppercase;
   }
 
-  @media (max-width: 700px) {
+  @media (max-width: 43.75rem) {
     .ports-header {
       align-items: flex-start;
       flex-direction: column;
