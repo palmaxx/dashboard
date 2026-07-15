@@ -12,6 +12,12 @@ export async function fetchProjects() {
   return res.json()
 }
 
+export async function fetchPorts() {
+  const res = await fetch(`${BASE}/api/ports`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Ports API returned ${res.status}`)
+  return res.json()
+}
+
 export async function addEntry(projectId, text, isTodo) {
   await fetch(`${BASE}/api/projects/${projectId}/add`, {
     method: 'POST',

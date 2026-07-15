@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -111,6 +111,33 @@ struct HardwareSnapshot {
     history: Vec<HistorySample>,
 }
 
+#[derive(Serialize, Clone, Debug)]
+struct PortsSnapshot {
+    timestamp: String,
+    listeners: Vec<PortListener>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+struct PortListener {
+    protocol: String,
+    #[serde(rename = "localAddress")]
+    local_address: String,
+    port: u16,
+    exposure: String,
+    #[serde(rename = "processId", skip_serializing_if = "Option::is_none")]
+    process_id: Option<u32>,
+    #[serde(rename = "processName", skip_serializing_if = "Option::is_none")]
+    process_name: Option<String>,
+}
+
+struct RawPortListener {
+    protocol: String,
+    local_address: String,
+    port: u16,
+    process_id: Option<u32>,
+    process_name: Option<String>,
+}
+
 type SharedState = Arc<RwLock<Option<HardwareSnapshot>>>;
 
 fn parse_positive_f32(value: Option<&str>) -> Option<f32> {
@@ -166,6 +193,222 @@ fn command_failure(label: &str, output: &std::process::Output) -> String {
             label, output.status, message
         )
     }
+}
+
+fn classify_exposure(address: &str) -> &'static str {
+    let clean = address.trim().trim_matches(['[', ']']);
+    let lower = clean.to_ascii_lowercase();
+    let without_scope = lower.split('%').next().unwrap_or(&lower);
+
+    if without_scope == "*" || without_scope == "localhost" {
+        return if without_scope == "*" { "lan" } else { "local" };
+    }
+
+    match without_scope.parse::<std::net::IpAddr>() {
+        Ok(ip) if ip.is_loopback() => "local",
+        Ok(_) => "lan",
+        Err(_) if without_scope.starts_with("127.") => "local",
+        Err(_) => "unknown",
+    }
+}
+
+fn normalize_port_listener(raw: RawPortListener) -> PortListener {
+    let local_address = raw.local_address.trim().to_string();
+    let process_name = raw.process_name.and_then(|name| {
+        let trimmed = name.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    });
+
+    PortListener {
+        protocol: raw.protocol.trim().to_ascii_lowercase(),
+        exposure: classify_exposure(&local_address).to_string(),
+        local_address,
+        port: raw.port,
+        process_id: raw.process_id,
+        process_name,
+    }
+}
+
+fn parse_listener_endpoint(endpoint: &str) -> Option<(String, u16)> {
+    let endpoint = endpoint
+        .trim()
+        .split(" (")
+        .next()
+        .unwrap_or_default()
+        .trim();
+    if endpoint.is_empty() || endpoint.contains("->") {
+        return None;
+    }
+
+    let (address, port) = if let Some(rest) = endpoint.strip_prefix('[') {
+        let (address, port) = rest.rsplit_once("]:")?;
+        (address, port)
+    } else {
+        endpoint.rsplit_once(':')?
+    };
+
+    Some((address.to_string(), port.parse().ok()?))
+}
+
+#[cfg(any(windows, test))]
+fn parse_tasklist_process_names(stdout: &str) -> HashMap<u32, String> {
+    let mut names = HashMap::new();
+    for line in stdout.lines() {
+        let fields: Vec<&str> = line.trim().trim_matches('"').split("\",\"").collect();
+        if fields.len() < 2 {
+            continue;
+        }
+        if let Ok(pid) = fields[1].parse() {
+            names.insert(pid, fields[0].to_string());
+        }
+    }
+    names
+}
+
+#[cfg(any(windows, test))]
+fn parse_netstat_ports(stdout: &str, process_names: &HashMap<u32, String>) -> Vec<PortListener> {
+    let mut listeners = Vec::new();
+
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 4 {
+            continue;
+        }
+
+        let protocol = parts[0].to_ascii_lowercase();
+        let (local_address, port, process_id) = match protocol.as_str() {
+            "tcp" if parts.len() >= 5 && parts[3] == "LISTENING" => {
+                let Some((local_address, port)) = parse_listener_endpoint(parts[1]) else {
+                    continue;
+                };
+                (local_address, port, parts[4].parse().ok())
+            }
+            "udp" => {
+                let Some((local_address, port)) = parse_listener_endpoint(parts[1]) else {
+                    continue;
+                };
+                (local_address, port, parts.last().and_then(|pid| pid.parse().ok()))
+            }
+            _ => continue,
+        };
+
+        listeners.push(normalize_port_listener(RawPortListener {
+            protocol,
+            local_address,
+            port,
+            process_id,
+            process_name: process_id.and_then(|pid| process_names.get(&pid).cloned()),
+        }));
+    }
+
+    listeners
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn parse_lsof_ports(stdout: &str) -> Vec<PortListener> {
+    let mut listeners = Vec::new();
+    let mut process_id = None;
+    let mut process_name = None;
+    let mut protocol = String::new();
+
+    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
+        let (field, value) = line.split_at(1);
+        match field {
+            "p" => {
+                process_id = value.trim().parse().ok();
+                process_name = None;
+                protocol.clear();
+            }
+            "c" => process_name = Some(value.trim().to_string()),
+            "P" => protocol = value.trim().to_ascii_lowercase(),
+            "n" => {
+                let Some((local_address, port)) = parse_listener_endpoint(value) else {
+                    continue;
+                };
+                listeners.push(normalize_port_listener(RawPortListener {
+                    protocol: protocol.clone(),
+                    local_address,
+                    port,
+                    process_id,
+                    process_name: process_name.clone(),
+                }));
+            }
+            _ => {}
+        }
+    }
+
+    listeners
+}
+
+fn exposure_rank(exposure: &str) -> u8 {
+    match exposure {
+        "lan" => 0,
+        "unknown" => 1,
+        _ => 2,
+    }
+}
+
+fn sort_port_listeners(listeners: &mut [PortListener]) {
+    listeners.sort_by(|a, b| {
+        exposure_rank(&a.exposure)
+            .cmp(&exposure_rank(&b.exposure))
+            .then(a.port.cmp(&b.port))
+            .then(a.protocol.cmp(&b.protocol))
+            .then(a.local_address.cmp(&b.local_address))
+    });
+}
+
+#[cfg(windows)]
+fn probe_ports() -> Result<Vec<PortListener>, String> {
+    let mut netstat = Command::new("netstat");
+    netstat.args(["-ano"]);
+
+    let output = run_probe_command(&mut netstat)
+        .map_err(|error| format!("netstat port probe could not be started: {}", error))?;
+    if !output.status.success() {
+        return Err(command_failure("netstat port probe", &output));
+    }
+
+    let process_names = probe_windows_process_names().unwrap_or_default();
+    Ok(parse_netstat_ports(
+        &String::from_utf8_lossy(&output.stdout),
+        &process_names,
+    ))
+}
+
+#[cfg(windows)]
+fn probe_windows_process_names() -> Result<HashMap<u32, String>, String> {
+    let mut tasklist = Command::new("tasklist");
+    tasklist.args(["/FO", "CSV", "/NH"]);
+
+    let output = run_probe_command(&mut tasklist)
+        .map_err(|error| format!("tasklist process probe could not be started: {}", error))?;
+    if !output.status.success() {
+        return Err(command_failure("tasklist process probe", &output));
+    }
+
+    Ok(parse_tasklist_process_names(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
+}
+
+#[cfg(target_os = "macos")]
+fn probe_ports() -> Result<Vec<PortListener>, String> {
+    let mut command = Command::new("lsof");
+    command.args(["-nP", "-iTCP", "-sTCP:LISTEN", "-iUDP", "-F", "pcPn"]);
+
+    let output = run_probe_command(&mut command)
+        .map_err(|error| format!("lsof port probe could not be started: {}", error))?;
+    if !output.status.success() {
+        return Err(command_failure("lsof port probe", &output));
+    }
+
+    Ok(parse_lsof_ports(&String::from_utf8_lossy(&output.stdout)))
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn probe_ports() -> Result<Vec<PortListener>, String> {
+    Err("Port audit is only implemented for Windows and macOS".to_string())
 }
 
 fn probe_nvidia_gpu() -> Result<GpuProbe, String> {
@@ -537,6 +780,7 @@ async fn main() {
     // Build the Axum router
     let app = Router::new()
         .route("/api/sysinfo", get(sysinfo_handler))
+        .route("/api/ports", get(ports_handler))
         .route("/api/projects", get(projects_handler))
         .route("/api/projects/:project_id/add", post(add_entry_handler))
         .route(
@@ -588,6 +832,27 @@ async fn sysinfo_handler(
             "System metrics starting up...".to_string(),
         )),
     }
+}
+
+async fn ports_handler() -> Result<impl IntoResponse, (StatusCode, String)> {
+    let mut listeners =
+        probe_ports().map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?;
+    sort_port_listeners(&mut listeners);
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
+    );
+    headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+
+    Ok((
+        headers,
+        Json(PortsSnapshot {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            listeners,
+        }),
+    ))
 }
 
 // --- REPOTASKS API LOGIC ---
@@ -720,4 +985,52 @@ fn rewrite_notes(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::OK)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classifies_bind_exposure() {
+        assert_eq!(classify_exposure("127.0.0.1"), "local");
+        assert_eq!(classify_exposure("::1"), "local");
+        assert_eq!(classify_exposure("0.0.0.0"), "lan");
+        assert_eq!(classify_exposure("::"), "lan");
+        assert_eq!(classify_exposure("192.168.1.20"), "lan");
+        assert_eq!(classify_exposure("not-an-address"), "unknown");
+    }
+
+    #[test]
+    fn parses_windows_netstat_output() {
+        let process_names = parse_tasklist_process_names(
+            "\"python.exe\",\"1234\",\"Console\",\"1\",\"10,000 K\"\n\"node.exe\",\"5678\",\"Console\",\"1\",\"50,000 K\"\n",
+        );
+        let ports = parse_netstat_ports(
+            "  TCP    0.0.0.0:8188       0.0.0.0:0      LISTENING       1234\n  UDP    127.0.0.1:5353      *:*                           5678\n",
+            &process_names,
+        );
+
+        assert_eq!(ports.len(), 2);
+        assert_eq!(ports[0].protocol, "tcp");
+        assert_eq!(ports[0].exposure, "lan");
+        assert_eq!(ports[0].process_name.as_deref(), Some("python.exe"));
+        assert_eq!(ports[1].exposure, "local");
+        assert_eq!(ports[1].process_name.as_deref(), Some("node.exe"));
+    }
+
+    #[test]
+    fn parses_lsof_port_output() {
+        let ports = parse_lsof_ports(
+            "p123\ncpython\nPTCP\nn*:8188\np456\ncbackend\nPTCP\nn127.0.0.1:9999\np789\ncmDNSResponder\nPUDP\nn[::1]:5353\n",
+        );
+
+        assert_eq!(ports.len(), 3);
+        assert_eq!(ports[0].local_address, "*");
+        assert_eq!(ports[0].exposure, "lan");
+        assert_eq!(ports[1].process_name.as_deref(), Some("backend"));
+        assert_eq!(ports[1].exposure, "local");
+        assert_eq!(ports[2].protocol, "udp");
+        assert_eq!(ports[2].exposure, "local");
+    }
 }

@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
-  import { fetchSysinfo, fetchProjects } from './lib/api.js'
+  import { fetchSysinfo, fetchProjects, fetchPorts } from './lib/api.js'
 
   import Hero from './components/Hero.svelte'
   import Sidebar from './components/Sidebar.svelte'
@@ -8,6 +8,7 @@
   import StoragePanel from './components/StoragePanel.svelte'
   import BookmarksPanel from './components/BookmarksPanel.svelte'
   import ProjectsPanel from './components/ProjectsPanel.svelte'
+  import PortsPanel from './components/PortsPanel.svelte'
   import WallpaperPicker from './components/WallpaperPicker.svelte'
 
   // Default wallpapers (these must exist in public/ or be valid remote URLs)
@@ -23,12 +24,15 @@
   let daemonStatus = 'loading'
   let hardware = null
   let projects = []
+  let portsSnapshot = null
+  let portsStatus = 'idle'
   let activeView = 'hardware'
 
   let currentWallpaper = WALLPAPERS[0].url
   let showWallpaperPicker = false
   let sysinfoInterval
   let projectsInterval
+  let portsInterval
 
   function loadWallpaper() {
     try {
@@ -74,6 +78,34 @@
     }
   }
 
+  async function pollPorts() {
+    try {
+      if (!portsSnapshot) portsStatus = 'loading'
+      portsSnapshot = await fetchPorts()
+      portsStatus = 'online'
+    } catch (e) {
+      console.warn('Ports poll failed:', e.message)
+      portsStatus = 'offline'
+    }
+  }
+
+  function startPortsPolling() {
+    if (portsInterval) return
+    pollPorts()
+    portsInterval = setInterval(pollPorts, 10000)
+  }
+
+  function stopPortsPolling() {
+    clearInterval(portsInterval)
+    portsInterval = null
+  }
+
+  function setActiveView(view) {
+    activeView = view
+    if (view === 'ports') startPortsPolling()
+    else stopPortsPolling()
+  }
+
   onMount(() => {
     loadWallpaper()
     
@@ -89,6 +121,7 @@
   onDestroy(() => {
     clearInterval(sysinfoInterval)
     clearInterval(projectsInterval)
+    clearInterval(portsInterval)
   })
 </script>
 
@@ -100,7 +133,7 @@
 />
 
 <div class="main-layout">
-  <Sidebar {activeView} onViewChange={v => (activeView = v)} />
+  <Sidebar {activeView} onViewChange={setActiveView} />
   
   <main class="content-area">
     {#if activeView === 'hardware'}
@@ -117,6 +150,10 @@
     {:else if activeView === 'bookmarks'}
       <div class="bookmarks-view">
         <BookmarksPanel compact={false} />
+      </div>
+    {:else if activeView === 'ports'}
+      <div class="ports-view">
+        <PortsPanel snapshot={portsSnapshot} status={portsStatus} onRefresh={pollPorts} />
       </div>
     {/if}
   </main>
@@ -158,6 +195,11 @@
 
   .bookmarks-view {
     max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .ports-view {
+    max-width: 1100px;
     margin: 0 auto;
   }
 
