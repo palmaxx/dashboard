@@ -92,7 +92,7 @@
 
 <style>
   .ports-card {
-    background: var(--surface);
+    background: var(--glass-strong);
   }
 
   .ports-header {
@@ -103,7 +103,7 @@
     gap: var(--sp-4);
     padding: var(--sp-4) var(--sp-5);
     border-bottom: 0.0625rem solid var(--line);
-    background: var(--surface-raised);
+    background: var(--glass-subtle);
   }
 
   .ports-header h2 {
@@ -176,7 +176,7 @@
   }
 
   th {
-    background: var(--surface-raised);
+    background: rgb(255 255 255 / 0.055);
     color: var(--text-secondary);
     font-size: 0.75rem;
     font-weight: 650;

@@ -2,7 +2,6 @@
   import { onMount } from 'svelte'
 
   export let daemonStatus = 'loading'
-  export let currentWallpaper = ''
   export let onWallpaperClick = () => {}
   export let onShuffleClick = () => {}
 
@@ -25,19 +24,28 @@
   })
 </script>
 
-<section
-  class="hero"
-  style="--wallpaper: url('{currentWallpaper}')"
-  aria-label="Time and dashboard status"
->
-  <header class="hero-top">
+<section class="hero" aria-label="Time and dashboard status">
+  <div class="hero-top glass-chrome">
     <a href="./index.html" class="brand" aria-label="Sleek Dashboard home">
       <span class="brand-mark" aria-hidden="true">SD</span>
       <span>Sleek Dashboard</span>
     </a>
 
+    <div class="daemon-status" aria-live="polite">
+      <span class="status-dot" class:online={daemonStatus === 'online'} class:offline={daemonStatus === 'offline'}></span>
+      <span>
+        {#if daemonStatus === 'online'}
+          Local daemon connected
+        {:else if daemonStatus === 'offline'}
+          Local daemon offline
+        {:else}
+          Connecting to local daemon
+        {/if}
+      </span>
+    </div>
+
     <div class="hero-actions" aria-label="Wallpaper controls">
-      <button class="hero-button" type="button" on:click={onWallpaperClick} aria-label="Choose wallpaper" title="Choose wallpaper">
+      <button class="hero-button" type="button" on:click={onWallpaperClick} aria-label="Personalize dashboard" title="Personalize dashboard">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4" width="18" height="16" rx="2"></rect>
           <circle cx="8.5" cy="9" r="1.5"></circle>
@@ -54,7 +62,7 @@
         </svg>
       </button>
     </div>
-  </header>
+  </div>
 
   <div class="hero-content">
     <p class="greeting">
@@ -64,61 +72,40 @@
     <h1 class="clock">{time}</h1>
     <p class="date">{date}</p>
   </div>
-
-  <div class="daemon-status" aria-live="polite">
-    <span class="status-dot" class:online={daemonStatus === 'online'} class:offline={daemonStatus === 'offline'}></span>
-    {#if daemonStatus === 'online'}
-      Local daemon connected
-    {:else if daemonStatus === 'offline'}
-      Local daemon offline
-    {:else}
-      Connecting to local daemon
-    {/if}
-  </div>
 </section>
 
 <style>
   .hero {
     position: relative;
+    z-index: 2;
     display: flex;
-    min-height: clamp(18.75rem, 36vh, 25rem);
+    width: min(96rem, 100%);
+    min-height: 29rem;
     flex-direction: column;
-    overflow: hidden;
-    background-image:
-      linear-gradient(90deg, rgb(3 7 15 / 0.92) 0%, rgb(5 10 22 / 0.68) 38%, rgb(5 10 22 / 0.08) 72%),
-      linear-gradient(180deg, rgb(4 8 16 / 0.06) 35%, var(--bg) 112%),
-      var(--wallpaper);
-    background-position: center;
-    background-size: cover;
+    margin: 0 auto;
+    padding: var(--sp-5) clamp(var(--sp-5), 3vw, var(--sp-10)) var(--sp-10);
     isolation: isolate;
   }
 
-  .hero::after {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: 0.5rem;
-    background: var(--accent-strong);
-    content: "";
-    z-index: -1;
-  }
-
   .hero-top {
-    display: flex;
+    display: grid;
+    min-height: 4rem;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     gap: var(--sp-4);
-    padding: var(--sp-5) clamp(var(--sp-5), 3vw, var(--sp-10));
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--radius-lg);
   }
 
   .brand {
     display: inline-flex;
+    min-width: 0;
     min-height: 2.75rem;
     align-items: center;
+    justify-self: start;
     gap: var(--sp-3);
     color: white;
-    font-size: 1rem;
+    font-size: 0.9375rem;
     font-weight: 650;
   }
 
@@ -126,18 +113,33 @@
     display: grid;
     width: 2.25rem;
     height: 2.25rem;
+    flex: 0 0 auto;
     place-items: center;
-    border: 0.0625rem solid rgb(255 255 255 / 0.35);
+    border: 0.0625rem solid rgb(255 255 255 / 0.24);
     border-radius: var(--radius-sm);
-    background: rgb(3 7 15 / 0.72);
+    background: rgb(4 8 18 / 0.46);
     font-size: 0.75rem;
     font-weight: 750;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
+  }
+
+  .daemon-status {
+    display: inline-flex;
+    min-height: 2.5rem;
+    align-items: center;
+    justify-self: center;
+    gap: var(--sp-2);
+    padding: var(--sp-1) var(--sp-3);
+    border-radius: var(--radius-sm);
+    color: rgb(255 255 255 / 0.86);
+    font-size: 0.8125rem;
+    font-weight: 600;
   }
 
   .hero-actions {
     display: flex;
-    gap: var(--sp-2);
+    justify-self: end;
+    gap: var(--sp-1);
   }
 
   .hero-button {
@@ -145,17 +147,18 @@
     width: 2.75rem;
     height: 2.75rem;
     place-items: center;
-    border: 0.0625rem solid rgb(255 255 255 / 0.3);
+    border: 0.0625rem solid transparent;
     border-radius: var(--radius-md);
-    background: rgb(3 7 15 / 0.72);
-    color: white;
+    color: rgb(255 255 255 / 0.84);
     transition: background-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+      border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .hero-button:hover {
-    border-color: white;
-    background: var(--accent-strong);
+    border-color: rgb(255 255 255 / 0.2);
+    background: rgb(255 255 255 / 0.1);
+    color: white;
   }
 
   .hero-button svg {
@@ -169,13 +172,11 @@
 
   .hero-content {
     display: flex;
-    width: min(42rem, calc(100% - 2.5rem));
     flex: 1;
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
-    align-self: flex-start;
-    padding: 0 clamp(var(--sp-5), 6vw, 7.5rem) var(--sp-8);
+    padding: var(--sp-10) clamp(var(--sp-3), 4vw, 4rem) var(--sp-12);
     color: white;
     text-align: left;
   }
@@ -185,52 +186,57 @@
     align-items: center;
     gap: var(--sp-2);
     margin-bottom: var(--sp-2);
-    font-size: 1.125rem;
-    font-weight: 600;
+    font-size: 1rem;
+    font-weight: 650;
+    text-shadow: 0 0.125rem 0.25rem rgb(0 0 0 / 0.72);
   }
 
   .clock {
     color: white;
     font-family: var(--font-display);
-    font-size: clamp(4.75rem, 7vw, 6rem);
+    font-size: 6rem;
     font-variant-numeric: tabular-nums;
     font-weight: 400;
     letter-spacing: -0.035em;
     line-height: 0.9;
-    text-shadow: 0 0.25rem 0.5rem rgb(0 0 0 / 0.45);
+    text-shadow: 0 0.25rem 0.5rem rgb(0 0 0 / 0.52);
     text-wrap: balance;
   }
 
   .date {
     margin-top: var(--sp-3);
-    font-size: 1.25rem;
-    font-weight: 600;
-    text-shadow: 0 0.125rem 0.25rem rgb(0 0 0 / 0.7);
+    font-size: 1.125rem;
+    font-weight: 650;
+    text-shadow: 0 0.125rem 0.25rem rgb(0 0 0 / 0.72);
   }
 
-  .daemon-status {
-    display: inline-flex;
-    min-height: 2.75rem;
-    align-items: center;
-    align-self: flex-start;
-    gap: var(--sp-2);
-    margin: 0 clamp(var(--sp-5), 3vw, var(--sp-10)) var(--sp-4);
-    padding: var(--sp-2) var(--sp-3);
-    border-radius: var(--radius-sm);
-    background: rgb(3 7 15 / 0.82);
-    color: white;
-    font-size: 0.875rem;
-    font-weight: 600;
-  }
+  @media (max-width: 47.5rem) {
+    .hero {
+      min-height: 25rem;
+      padding: var(--sp-4);
+      padding-bottom: var(--sp-8);
+    }
 
-  @media (max-width: 40rem) {
-    .brand > span:last-child {
-      display: none;
+    .hero-top {
+      grid-template-columns: 1fr auto;
+    }
+
+    .daemon-status {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      width: 100%;
+      min-height: 2rem;
+      justify-content: flex-start;
+      padding: 0 var(--sp-2) var(--sp-1);
+    }
+
+    .hero-actions {
+      grid-column: 2;
+      grid-row: 1;
     }
 
     .hero-content {
-      padding-right: var(--sp-5);
-      padding-left: var(--sp-5);
+      padding: var(--sp-8) var(--sp-2) var(--sp-10);
     }
 
     .clock {
@@ -239,6 +245,16 @@
 
     .date {
       font-size: 1rem;
+    }
+  }
+
+  @media (max-width: 24rem) {
+    .brand > span:last-child {
+      display: none;
+    }
+
+    .clock {
+      font-size: 4.25rem;
     }
   }
 </style>

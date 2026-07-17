@@ -44,12 +44,12 @@
 
 <style>
   .card {
-    background: var(--surface);
+    background: var(--glass-strong);
   }
 
   .card-header {
     min-height: 4.5rem;
-    background: var(--surface-raised);
+    background: var(--glass-subtle);
   }
 
   .card-header p {

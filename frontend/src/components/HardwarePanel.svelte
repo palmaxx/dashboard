@@ -173,9 +173,11 @@
   .telemetry-panel {
     min-width: 0;
     padding: var(--sp-5);
-    border: 0.0625rem solid var(--line);
+    border: 0.0625rem solid var(--glass-border);
     border-radius: var(--radius-lg);
-    background: var(--surface);
+    background: var(--glass-panel);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.16);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.16);
   }
 
   .cpu-panel {
@@ -190,7 +192,7 @@
 
   .network-panel {
     grid-area: network;
-    background: var(--surface-raised);
+    background: var(--glass-strong);
   }
 
   .gpu-panel {
@@ -279,7 +281,7 @@
     min-width: 0.25rem;
     flex: 1;
     border-radius: 0.125rem;
-    background: var(--line);
+    background: rgb(255 255 255 / 0.12);
   }
 
   .memory-meter span.active {

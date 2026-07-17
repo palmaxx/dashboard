@@ -104,7 +104,8 @@
     transition: opacity 150ms;
   }
 
-  .entry:hover .entry-actions { opacity: 1; }
+  .entry:hover .entry-actions,
+  .entry:focus-within .entry-actions { opacity: 1; }
 
   .entry-actions button {
     width: 24px;

@@ -168,7 +168,7 @@
 
 <style>
   .bookmarks-panel {
-    background: var(--surface);
+    background: transparent;
   }
 
   .panel-header {
@@ -178,8 +178,9 @@
     justify-content: space-between;
     gap: var(--sp-4);
     padding: var(--sp-4) var(--sp-5);
-    background: var(--accent-strong);
-    color: white;
+    border-bottom: 0.0625rem solid var(--glass-border);
+    background: var(--glass-subtle);
+    color: var(--text-primary);
   }
 
   .panel-header h2 {
@@ -190,7 +191,7 @@
 
   .panel-header p {
     margin-top: var(--sp-1);
-    color: rgb(255 255 255 / 0.82);
+    color: var(--text-secondary);
     font-size: 0.875rem;
   }
 
@@ -200,16 +201,17 @@
     align-items: center;
     gap: var(--sp-2);
     padding: var(--sp-2) var(--sp-3);
-    border: 0.0625rem solid rgb(255 255 255 / 0.4);
+    border: 0.0625rem solid var(--glass-border);
     border-radius: var(--radius-md);
-    background: rgb(3 7 15 / 0.2);
-    color: white;
+    background: rgb(255 255 255 / 0.05);
+    color: var(--text-primary);
     font-size: 0.875rem;
     font-weight: 650;
   }
 
   .add-button:hover {
-    background: rgb(3 7 15 / 0.38);
+    border-color: var(--line-strong);
+    background: rgb(255 255 255 / 0.1);
   }
 
   .add-button svg,
@@ -287,9 +289,9 @@
     justify-content: center;
     gap: var(--sp-1);
     padding: var(--sp-2);
-    border: 0.0625rem solid var(--line);
+    border: 0.0625rem solid var(--glass-border);
     border-radius: var(--radius-md);
-    background: var(--surface-raised);
+    background: rgb(255 255 255 / 0.045);
     transition: border-color 180ms ease, background-color 180ms ease;
   }
 
@@ -328,7 +330,7 @@
     height: 1.75rem;
     place-items: center;
     border-radius: var(--radius-sm);
-    background: var(--bg);
+    background: rgb(3 7 15 / 0.86);
     color: var(--red);
     opacity: 0;
     transition: opacity 150ms ease;
@@ -401,7 +403,7 @@
   }
 
   .bookmark-row:hover {
-    background: var(--surface-hover);
+    background: rgb(255 255 255 / 0.065);
   }
 
   .bookmark-row:last-child {
@@ -414,7 +416,7 @@
     height: 2rem;
     place-items: center;
     border-radius: var(--radius-sm);
-    background: var(--surface-raised);
+    background: rgb(255 255 255 / 0.08);
     color: var(--text-primary);
     font-size: 0.75rem;
     font-weight: 700;

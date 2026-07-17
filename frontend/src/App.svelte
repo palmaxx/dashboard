@@ -9,15 +9,17 @@
   import ProjectsPanel from './components/ProjectsPanel.svelte'
   import StoragePanel from './components/StoragePanel.svelte'
   import WallpaperPicker from './components/WallpaperPicker.svelte'
+  import WallpaperStage from './components/WallpaperStage.svelte'
 
   const WALLPAPERS = [
-    { url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop', name: 'Abstract Liquid' },
-    { url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2670&auto=format&fit=crop', name: 'Dark Geometry' },
-    { url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=2694&auto=format&fit=crop', name: 'Neon Mountains' },
-    { url: 'https://images.unsplash.com/photo-1604871000636-074fa5117945?q=80&w=2574&auto=format&fit=crop', name: 'Dark Mesh' },
-    { url: 'https://images.unsplash.com/photo-1557672172-298e090bd0f1?q=80&w=2574&auto=format&fit=crop', name: 'Gradient Flow' },
-    { url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2670&auto=format&fit=crop', name: 'Circuit Board' }
+    { url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=84&w=2560&h=1440&auto=format&fit=crop&crop=entropy', name: 'Abstract Liquid' },
+    { url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=84&w=2560&h=1440&auto=format&fit=crop&crop=entropy', name: 'Dark Geometry' },
+    { url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=84&w=2560&h=1440&auto=format&fit=crop&crop=entropy', name: 'Neon Mountains' },
+    { url: 'https://images.unsplash.com/photo-1604871000636-074fa5117945?q=84&w=2560&h=1440&auto=format&fit=crop&crop=entropy', name: 'Dark Mesh' },
+    { url: 'https://images.unsplash.com/photo-1557672172-298e090bd0f1?q=84&w=2560&h=1440&auto=format&fit=crop&crop=entropy', name: 'Gradient Flow' },
+    { url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=84&w=2560&h=1440&auto=format&fit=crop&crop=entropy', name: 'Circuit Board' }
   ]
+  const WALLPAPER_LAYOUT_VERSION = '2'
 
   const ACCENT_THEMES = [
     {
@@ -25,7 +27,7 @@
       name: 'Electric Blue',
       accent: 'oklch(63% 0.24 260)',
       strong: 'oklch(56% 0.27 260)',
-      soft: 'oklch(25% 0.09 260)',
+      soft: 'oklch(31% 0.09 260 / 0.72)',
       focus: 'oklch(79% 0.15 215)'
     },
     {
@@ -33,15 +35,15 @@
       name: 'Violet',
       accent: 'oklch(66% 0.22 300)',
       strong: 'oklch(54% 0.24 300)',
-      soft: 'oklch(25% 0.08 300)',
+      soft: 'oklch(31% 0.08 300 / 0.72)',
       focus: 'oklch(78% 0.14 300)'
     },
     {
       id: 'teal',
       name: 'Teal',
       accent: 'oklch(69% 0.16 190)',
-      strong: 'oklch(51% 0.15 190)',
-      soft: 'oklch(25% 0.055 190)',
+      strong: 'oklch(50% 0.15 190)',
+      soft: 'oklch(31% 0.055 190 / 0.72)',
       focus: 'oklch(80% 0.13 190)'
     },
     {
@@ -49,7 +51,7 @@
       name: 'Magenta',
       accent: 'oklch(65% 0.24 340)',
       strong: 'oklch(54% 0.25 340)',
-      soft: 'oklch(25% 0.085 340)',
+      soft: 'oklch(31% 0.085 340 / 0.72)',
       focus: 'oklch(77% 0.15 340)'
     },
     {
@@ -57,7 +59,7 @@
       name: 'Amber',
       accent: 'oklch(76% 0.16 80)',
       strong: 'oklch(54% 0.16 75)',
-      soft: 'oklch(26% 0.06 75)',
+      soft: 'oklch(32% 0.06 75 / 0.72)',
       focus: 'oklch(85% 0.13 85)'
     }
   ]
@@ -71,6 +73,8 @@
   let portsStatus = 'idle'
   let portsExpanded = false
   let currentWallpaper = WALLPAPERS[0].url
+  let wallpaperFit = 'fill'
+  let wallpaperPosition = 'center'
   let currentAccentThemeId = DEFAULT_ACCENT_THEME.id
   let showWallpaperPicker = false
   let sysinfoInterval
@@ -85,10 +89,34 @@
     `--focus-ring: ${currentAccentTheme.focus}`
   ].join('; ')
 
+  function normalizeWallpaperUrl(url) {
+    if (typeof url !== 'string') return ''
+    const baseUrl = url.split('?')[0]
+    const bundledWallpaper = WALLPAPERS.find(wallpaper => wallpaper.url.startsWith(baseUrl + '?'))
+    return bundledWallpaper?.url || url
+  }
+
   function loadWallpaper() {
     try {
       const saved = localStorage.getItem('dashWallpaper')
-      if (saved) currentWallpaper = saved
+      if (saved) {
+        currentWallpaper = normalizeWallpaperUrl(saved)
+        if (currentWallpaper !== saved) localStorage.setItem('dashWallpaper', currentWallpaper)
+      }
+      const savedFit = localStorage.getItem('dashWallpaperFit')
+      const savedPosition = localStorage.getItem('dashWallpaperPosition')
+      const savedLayoutVersion = localStorage.getItem('dashWallpaperLayoutVersion')
+
+      if (savedLayoutVersion === WALLPAPER_LAYOUT_VERSION) {
+        if (savedFit === 'fit' || savedFit === 'fill') wallpaperFit = savedFit
+        if (['top', 'center', 'bottom'].includes(savedPosition)) wallpaperPosition = savedPosition
+      } else {
+        wallpaperFit = 'fill'
+        wallpaperPosition = 'center'
+        localStorage.setItem('dashWallpaperFit', wallpaperFit)
+        localStorage.setItem('dashWallpaperPosition', wallpaperPosition)
+        localStorage.setItem('dashWallpaperLayoutVersion', WALLPAPER_LAYOUT_VERSION)
+      }
     } catch {}
   }
 
@@ -100,8 +128,26 @@
   }
 
   function saveWallpaper(url) {
-    currentWallpaper = url
-    try { localStorage.setItem('dashWallpaper', url) } catch {}
+    currentWallpaper = normalizeWallpaperUrl(url)
+    try { localStorage.setItem('dashWallpaper', currentWallpaper) } catch {}
+  }
+
+  function selectWallpaperFit(mode) {
+    if (mode !== 'fit' && mode !== 'fill') return
+    wallpaperFit = mode
+    try {
+      localStorage.setItem('dashWallpaperFit', mode)
+      localStorage.setItem('dashWallpaperLayoutVersion', WALLPAPER_LAYOUT_VERSION)
+    } catch {}
+  }
+
+  function selectWallpaperPosition(position) {
+    if (!['top', 'center', 'bottom'].includes(position)) return
+    wallpaperPosition = position
+    try {
+      localStorage.setItem('dashWallpaperPosition', position)
+      localStorage.setItem('dashWallpaperLayoutVersion', WALLPAPER_LAYOUT_VERSION)
+    } catch {}
   }
 
   function selectAccentTheme(id) {
@@ -112,7 +158,6 @@
 
   function handleWallpaperSelect(url) {
     saveWallpaper(url)
-    showWallpaperPicker = false
   }
 
   function shuffleWallpaper() {
@@ -185,9 +230,14 @@
 </script>
 
 <div class="app-shell" style={accentThemeStyle}>
+  <WallpaperStage
+    url={currentWallpaper}
+    fitMode={wallpaperFit}
+    focalPosition={wallpaperPosition}
+  />
+
   <Hero
     {daemonStatus}
-    {currentWallpaper}
     onWallpaperClick={() => (showWallpaperPicker = true)}
     onShuffleClick={shuffleWallpaper}
   />
@@ -240,9 +290,13 @@
     <WallpaperPicker
       wallpapers={WALLPAPERS}
       {currentWallpaper}
+      {wallpaperFit}
+      {wallpaperPosition}
       themes={ACCENT_THEMES}
       {currentAccentThemeId}
       onSelect={handleWallpaperSelect}
+      onFitChange={selectWallpaperFit}
+      onPositionChange={selectWallpaperPosition}
       onThemeSelect={selectAccentTheme}
       onClose={() => (showWallpaperPicker = false)}
     />
@@ -251,15 +305,19 @@
 
 <style>
   .app-shell {
+    position: relative;
+    z-index: 1;
     width: 100%;
     min-height: 100vh;
-    background: var(--bg);
+    background: transparent;
   }
 
   .dashboard {
-    width: 100%;
-    padding: clamp(var(--sp-5), 3vw, var(--sp-10));
-    background: var(--bg);
+    position: relative;
+    z-index: 2;
+    width: min(96rem, 100%);
+    margin: -2.75rem auto 0;
+    padding: 0 clamp(var(--sp-5), 3vw, var(--sp-10)) clamp(var(--sp-10), 5vw, 5rem);
   }
 
   .dashboard-split {
@@ -280,16 +338,24 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 0.5rem;
     overflow: hidden;
-    border: 0.0625rem solid var(--line);
     border-radius: var(--radius-lg);
-    background: var(--accent-strong);
+    background: var(--glass-panel);
+    border: 0.0625rem solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.16);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.16);
   }
 
   .activity-rail :global(.card) {
     border: 0;
     border-radius: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .activity-rail :global(.card + .card) {
+    border-top: 0.0625rem solid var(--glass-border);
   }
 
   .port-audit {
@@ -304,11 +370,13 @@
     justify-content: space-between;
     gap: var(--sp-4);
     padding: var(--sp-3) var(--sp-5);
-    border: 0.0625rem solid var(--line);
+    border: 0.0625rem solid var(--glass-border);
     border-radius: var(--radius-lg);
-    background: var(--surface);
+    background: var(--glass-panel);
     color: var(--text-secondary);
     text-align: left;
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.16);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.16);
     transition: background-color 180ms ease, border-color 180ms ease;
   }
 
@@ -376,16 +444,28 @@
       display: grid;
       grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
     }
+
+    .activity-rail :global(.card + .card) {
+      border-top: 0;
+      border-left: 0.0625rem solid var(--glass-border);
+    }
   }
 
   @media (max-width: 47.5rem) {
     .dashboard {
+      margin-top: -1.5rem;
       padding: var(--sp-4);
+      padding-bottom: var(--sp-10);
     }
 
     .activity-rail {
       display: flex;
       flex-direction: column;
+    }
+
+    .activity-rail :global(.card + .card) {
+      border-top: 0.0625rem solid var(--glass-border);
+      border-left: 0;
     }
 
     .port-audit {

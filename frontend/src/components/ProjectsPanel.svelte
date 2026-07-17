@@ -106,23 +106,23 @@
 <style>
   .card-header {
     min-height: 4.75rem;
-    border-bottom: 0;
-    background: var(--accent-strong);
-    color: white;
+    border-bottom: 0.0625rem solid var(--glass-border);
+    background: var(--glass-subtle);
+    color: var(--text-primary);
   }
 
   .card-header p {
     margin-top: var(--sp-1);
-    color: rgb(255 255 255 / 0.82);
+    color: var(--text-secondary);
     font-size: 0.875rem;
   }
 
   .active-badge {
     padding: var(--sp-1) var(--sp-2);
-    border: 0.0625rem solid rgb(255 255 255 / 0.4);
+    border: 0.0625rem solid var(--glass-border);
     border-radius: var(--radius-sm);
-    background: rgb(3 7 15 / 0.2);
-    color: white;
+    background: rgb(255 255 255 / 0.05);
+    color: var(--text-secondary);
     font-family: var(--font-mono);
     font-size: 0.75rem;
     font-variant-numeric: tabular-nums;
@@ -145,7 +145,7 @@
     align-items: center;
     gap: var(--sp-3);
     padding: var(--sp-2) var(--sp-5);
-    background: var(--surface);
+    background: transparent;
   }
 
   .color-dot {
