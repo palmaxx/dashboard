@@ -21,6 +21,7 @@
   --accent-strong: oklch(56% 0.27 260);
   --accent-soft: oklch(25% 0.09 260);
   --cyan: oklch(79% 0.15 215);
+  --focus-ring: var(--cyan);
   --orange: oklch(76% 0.18 55);
   --green: oklch(78% 0.17 150);
   --amber: oklch(82% 0.16 85);
@@ -103,7 +104,7 @@ label {
 }
 
 :focus-visible {
-  outline: 0.1875rem solid var(--cyan);
+  outline: 0.1875rem solid var(--focus-ring);
   outline-offset: 0.1875rem;
 }
 

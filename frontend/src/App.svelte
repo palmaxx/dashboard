@@ -19,6 +19,51 @@
     { url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2670&auto=format&fit=crop', name: 'Circuit Board' }
   ]
 
+  const ACCENT_THEMES = [
+    {
+      id: 'electric-blue',
+      name: 'Electric Blue',
+      accent: 'oklch(63% 0.24 260)',
+      strong: 'oklch(56% 0.27 260)',
+      soft: 'oklch(25% 0.09 260)',
+      focus: 'oklch(79% 0.15 215)'
+    },
+    {
+      id: 'violet',
+      name: 'Violet',
+      accent: 'oklch(66% 0.22 300)',
+      strong: 'oklch(54% 0.24 300)',
+      soft: 'oklch(25% 0.08 300)',
+      focus: 'oklch(78% 0.14 300)'
+    },
+    {
+      id: 'teal',
+      name: 'Teal',
+      accent: 'oklch(69% 0.16 190)',
+      strong: 'oklch(51% 0.15 190)',
+      soft: 'oklch(25% 0.055 190)',
+      focus: 'oklch(80% 0.13 190)'
+    },
+    {
+      id: 'magenta',
+      name: 'Magenta',
+      accent: 'oklch(65% 0.24 340)',
+      strong: 'oklch(54% 0.25 340)',
+      soft: 'oklch(25% 0.085 340)',
+      focus: 'oklch(77% 0.15 340)'
+    },
+    {
+      id: 'amber',
+      name: 'Amber',
+      accent: 'oklch(76% 0.16 80)',
+      strong: 'oklch(54% 0.16 75)',
+      soft: 'oklch(26% 0.06 75)',
+      focus: 'oklch(85% 0.13 85)'
+    }
+  ]
+
+  const DEFAULT_ACCENT_THEME = ACCENT_THEMES[0]
+
   let daemonStatus = 'loading'
   let hardware = null
   let projects = []
@@ -26,10 +71,19 @@
   let portsStatus = 'idle'
   let portsExpanded = false
   let currentWallpaper = WALLPAPERS[0].url
+  let currentAccentThemeId = DEFAULT_ACCENT_THEME.id
   let showWallpaperPicker = false
   let sysinfoInterval
   let projectsInterval
   let portsInterval
+
+  $: currentAccentTheme = ACCENT_THEMES.find(theme => theme.id === currentAccentThemeId) || DEFAULT_ACCENT_THEME
+  $: accentThemeStyle = [
+    `--accent: ${currentAccentTheme.accent}`,
+    `--accent-strong: ${currentAccentTheme.strong}`,
+    `--accent-soft: ${currentAccentTheme.soft}`,
+    `--focus-ring: ${currentAccentTheme.focus}`
+  ].join('; ')
 
   function loadWallpaper() {
     try {
@@ -38,9 +92,22 @@
     } catch {}
   }
 
+  function loadAccentTheme() {
+    try {
+      const saved = localStorage.getItem('dashAccentTheme')
+      if (ACCENT_THEMES.some(theme => theme.id === saved)) currentAccentThemeId = saved
+    } catch {}
+  }
+
   function saveWallpaper(url) {
     currentWallpaper = url
     try { localStorage.setItem('dashWallpaper', url) } catch {}
+  }
+
+  function selectAccentTheme(id) {
+    if (!ACCENT_THEMES.some(theme => theme.id === id)) return
+    currentAccentThemeId = id
+    try { localStorage.setItem('dashAccentTheme', id) } catch {}
   }
 
   function handleWallpaperSelect(url) {
@@ -103,6 +170,7 @@
 
   onMount(() => {
     loadWallpaper()
+    loadAccentTheme()
     pollSysinfo()
     pollProjects()
     sysinfoInterval = setInterval(pollSysinfo, 2000)
@@ -116,67 +184,78 @@
   })
 </script>
 
-<Hero
-  {daemonStatus}
-  {currentWallpaper}
-  onWallpaperClick={() => (showWallpaperPicker = true)}
-  onShuffleClick={shuffleWallpaper}
-/>
+<div class="app-shell" style={accentThemeStyle}>
+  <Hero
+    {daemonStatus}
+    {currentWallpaper}
+    onWallpaperClick={() => (showWallpaperPicker = true)}
+    onShuffleClick={shuffleWallpaper}
+  />
 
-<main class="dashboard">
-  <div class="dashboard-split">
-    <div class="telemetry-column">
-      <HardwarePanel {hardware} status={daemonStatus} />
-      <StoragePanel storage={hardware?.storage || []} status={daemonStatus} />
+  <main class="dashboard">
+    <div class="dashboard-split">
+      <div class="telemetry-column">
+        <HardwarePanel {hardware} status={daemonStatus} />
+        <StoragePanel storage={hardware?.storage || []} status={daemonStatus} />
+      </div>
+
+      <aside class="activity-rail" aria-label="Bookmarks and project activity">
+        <BookmarksPanel />
+        <ProjectsPanel {projects} compact={true} onRefresh={pollProjects} />
+      </aside>
     </div>
 
-    <aside class="activity-rail" aria-label="Bookmarks and project activity">
-      <BookmarksPanel />
-      <ProjectsPanel {projects} compact={true} onRefresh={pollProjects} />
-    </aside>
-  </div>
-
-  <section class="port-audit">
-    <button
-      class="port-toggle"
-      type="button"
-      aria-expanded={portsExpanded}
-      aria-controls="port-audit-panel"
-      on:click={togglePorts}
-    >
-      <span class="port-toggle-copy">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path>
-          <path d="M9 12h6"></path>
-        </svg>
-        <span>
-          <strong>Port audit</strong>
-          <small>{portsExpanded ? 'Listening services are shown below' : 'Inspect local listening services'}</small>
+    <section class="port-audit">
+      <button
+        class="port-toggle"
+        type="button"
+        aria-expanded={portsExpanded}
+        aria-controls="port-audit-panel"
+        on:click={togglePorts}
+      >
+        <span class="port-toggle-copy">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path>
+            <path d="M9 12h6"></path>
+          </svg>
+          <span>
+            <strong>Port audit</strong>
+            <small>{portsExpanded ? 'Listening services are shown below' : 'Inspect local listening services'}</small>
+          </span>
         </span>
-      </span>
-      <svg class="chevron" class:expanded={portsExpanded} viewBox="0 0 24 24" aria-hidden="true">
-        <path d="m6 9 6 6 6-6"></path>
-      </svg>
-    </button>
+        <svg class="chevron" class:expanded={portsExpanded} viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 9 6 6 6-6"></path>
+        </svg>
+      </button>
 
-    {#if portsExpanded}
-      <div id="port-audit-panel">
-        <PortsPanel snapshot={portsSnapshot} status={portsStatus} onRefresh={pollPorts} />
-      </div>
-    {/if}
-  </section>
-</main>
+      {#if portsExpanded}
+        <div id="port-audit-panel">
+          <PortsPanel snapshot={portsSnapshot} status={portsStatus} onRefresh={pollPorts} />
+        </div>
+      {/if}
+    </section>
+  </main>
 
-{#if showWallpaperPicker}
-  <WallpaperPicker
-    wallpapers={WALLPAPERS}
-    {currentWallpaper}
-    onSelect={handleWallpaperSelect}
-    onClose={() => (showWallpaperPicker = false)}
-  />
-{/if}
+  {#if showWallpaperPicker}
+    <WallpaperPicker
+      wallpapers={WALLPAPERS}
+      {currentWallpaper}
+      themes={ACCENT_THEMES}
+      {currentAccentThemeId}
+      onSelect={handleWallpaperSelect}
+      onThemeSelect={selectAccentTheme}
+      onClose={() => (showWallpaperPicker = false)}
+    />
+  {/if}
+</div>
 
 <style>
+  .app-shell {
+    width: 100%;
+    min-height: 100vh;
+    background: var(--bg);
+  }
+
   .dashboard {
     width: 100%;
     padding: clamp(var(--sp-5), 3vw, var(--sp-10));
